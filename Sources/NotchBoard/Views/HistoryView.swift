@@ -24,6 +24,7 @@ struct HistoryView: View {
                     subtitle: viewModel.showFavoritesOnly ? L.emptyFavoritesSubtitle : L.noMatchesSubtitle
                 )
             } else {
+                ScrollViewReader { proxy in
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(Array(filtered.enumerated()), id: \.element.id) { index, item in
@@ -33,6 +34,7 @@ struct HistoryView: View {
                                 isSelected: viewModel.selectedIndex == index,
                                 onToggleFavorite: { viewModel.clipboard.toggleFavorite(item) }
                             )
+                            .id(item.id)
                             .hoverFeedback()
                             .onTapGesture {
                                 viewModel.selectAndCopy(item)
@@ -76,6 +78,14 @@ struct HistoryView: View {
                 }
                 .scrollIndicators(.never)
                 .scrollEdgeFade()
+                .onChange(of: viewModel.selectedIndex) { _, newValue in
+                    guard filtered.indices.contains(newValue) else { return }
+                    let id = filtered[newValue].id
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo(id, anchor: .center)
+                    }
+                }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

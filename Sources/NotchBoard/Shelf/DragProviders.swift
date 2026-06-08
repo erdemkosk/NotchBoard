@@ -12,7 +12,9 @@ enum DragProviders {
     static func beginDrag() {
         NotchWindowController.isDraggingOut = true
         // Safety reset in case we never observe the cursor re-entering the panel.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        // Kept generous so slower file drags (non-image types take longer to
+        // hand off) still see the shelf-origin flag when dropped back.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
             NotchWindowController.isDraggingOut = false
             draggingShelfItemID = nil
         }

@@ -74,11 +74,11 @@ struct ShelfView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        // A shelf tile dragged and dropped back onto the shelf: ignore so we
+        // A shelf tile dragged and dropped back onto the shelf: consume it so we
         // don't duplicate it (the dropped data may be a temp copy URL).
         if DragProviders.draggingShelfItemID != nil {
             DragProviders.draggingShelfItemID = nil
-            return false
+            return true
         }
         var handled = false
         for provider in providers {

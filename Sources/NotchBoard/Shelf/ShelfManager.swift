@@ -76,9 +76,37 @@ final class ShelfManager: ObservableObject {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         let shelfDir = shelfDirectory.resolvingSymlinksInPath().standardizedFileURL
         if resolved.deletingLastPathComponent() == shelfDir { return true }
-        return items.contains {
+        if items.contains(where: {
             $0.fileURL.resolvingSymlinksInPath().standardizedFileURL == resolved
+        }) { return true }
+
+        // A shelf tile dragged out and dropped back arrives as a fresh temp copy
+        // with a different path, so the path checks above miss it and we'd keep
+        // duplicating it. Treat it as already-present when an existing shelf item
+        // has the same byte size and a matching base name. This covers every file
+        // type (not just images), which the path checks alone did not.
+        guard let droppedSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+            return false
         }
+        let droppedBase = Self.baseName(url.lastPathComponent)
+        return items.contains { item in
+            let itemSize = (try? item.fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
+            guard itemSize == droppedSize else { return false }
+            let names = [item.fileURL.lastPathComponent, item.displayName].map(Self.baseName)
+            return names.contains { $0 == droppedBase || droppedBase.hasPrefix($0) || $0.hasPrefix(droppedBase) }
+        }
+    }
+
+    /// Filename without its extension and trailing copy suffixes the OS or our own
+    /// `uniqueDestination` adds (e.g. "report-1", "report 2", "report copy").
+    private static func baseName(_ name: String) -> String {
+        var b = (name as NSString).deletingPathExtension.lowercased()
+        b = b.replacingOccurrences(
+            of: #"[ \-_]*(copy|kopya|\d+)$"#,
+            with: "",
+            options: .regularExpression
+        )
+        return b.trimmingCharacters(in: .whitespaces)
     }
 
     private func uniqueDestination(for name: String) -> URL {

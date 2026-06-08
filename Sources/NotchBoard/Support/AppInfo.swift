@@ -21,6 +21,6 @@ enum AppInfo {
 
     /// Developer's personal website.
     static var websiteURL: URL {
-        URL(string: "https://www.erdemkosk.com")!
+        URL(string: "https://erdemkosk.com")!
     }
 }
