@@ -69,9 +69,6 @@ final class NotchViewModel: ObservableObject {
     /// Set by the window controller so views can ask the panel to collapse.
     var requestClose: (() -> Void)?
 
-    /// The app that was frontmost before the panel opened (for auto-paste).
-    var previousApp: NSRunningApplication?
-
     /// History filtered by search text and favorites toggle.
     var visibleHistory: [ClipboardItem] {
         var result = clipboard.items
@@ -95,7 +92,10 @@ final class NotchViewModel: ObservableObject {
                     || item.tags.contains { $0.lowercased().contains(q) }
             }
         }
-        return result
+        // Pinned snippets always float to the top, keeping their relative order.
+        let pinned = result.filter { $0.isPinned }
+        let rest = result.filter { !$0.isPinned }
+        return pinned + rest
     }
 
     /// Kinds currently present in history, in a stable display order.
@@ -117,21 +117,14 @@ final class NotchViewModel: ObservableObject {
 
     // MARK: - Selection / clicks
 
-    /// Copies an item, flashes feedback, closes the panel, and optionally pastes
-    /// it into the previously focused app.
+    /// Copies an item to the clipboard, flashes feedback, and closes the panel.
+    /// The user then pastes it manually wherever they want (Cmd+V).
     func selectAndCopy(_ item: ClipboardItem) {
         clipboard.copyToPasteboard(item)
         lastCopiedID = item.id
-        let target = previousApp
-        let autoPaste = AppSettings.shared.autoPaste
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.lastCopiedID = nil
             self?.requestClose?()
-            if autoPaste {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    AutoPaster.paste(to: target)
-                }
-            }
         }
     }
 

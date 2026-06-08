@@ -108,3 +108,40 @@ enum TagPrompt {
         return value.isEmpty ? nil : value
     }
 }
+
+/// Modal prompt for creating a reusable, pinned text snippet (multiline).
+@MainActor
+enum SnippetPrompt {
+    static func run() -> String? {
+        let alert = NSAlert()
+        alert.messageText = L.newSnippetTitle
+        alert.informativeText = L.newSnippetHint
+        alert.addButton(withTitle: L.save)
+        alert.addButton(withTitle: L.cancel)
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 320, height: 110))
+        scroll.borderType = .bezelBorder
+        scroll.hasVerticalScroller = true
+        let textView = NSTextView(frame: scroll.bounds)
+        textView.autoresizingMask = [.width]
+        textView.font = .systemFont(ofSize: 13)
+        textView.isRichText = false
+        scroll.documentView = textView
+        alert.accessoryView = scroll
+        alert.window.initialFirstResponder = textView
+
+        let win = alert.window
+        win.level = .popUpMenu
+        DispatchQueue.main.async {
+            let screen = NotchScreenMetrics.active.screen
+            let sf = screen.frame
+            let size = win.frame.size
+            win.setFrameOrigin(NSPoint(x: sf.midX - size.width / 2, y: sf.midY - size.height / 2 - 60))
+        }
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return nil }
+        let value = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+}

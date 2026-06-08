@@ -28,9 +28,12 @@ struct NotchView: View {
                     notchHeight: viewModel.notchHeight
                 )
                 .transition(
-                    .scale(scale: 0.7, anchor: .top)
-                        .combined(with: .offset(y: -8))
-                        .combined(with: .opacity)
+                    .asymmetric(
+                        insertion: .opacity,
+                        removal: .scale(scale: 0.6, anchor: .top)
+                            .combined(with: .offset(y: -6))
+                            .combined(with: .opacity)
+                    )
                 )
             } else {
                 ClosedPill(viewModel: viewModel)

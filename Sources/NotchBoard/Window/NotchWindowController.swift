@@ -196,11 +196,6 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
     private func open() {
         cancelClose()
         guard !viewModel.isOpen else { return }
-        // Remember who was focused so auto-paste can return content there.
-        let front = NSWorkspace.shared.frontmostApplication
-        if front?.bundleIdentifier != Bundle.main.bundleIdentifier {
-            viewModel.previousApp = front
-        }
         viewModel.selectedIndex = 0
         // Slide down on whichever display the user is currently on (e.g. when the
         // panel is summoned via the keyboard shortcut from a secondary screen).
@@ -228,9 +223,8 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
             guard let self, !self.viewModel.isOpen else { return }
             self.window?.ignoresMouseEvents = true
             self.triggerWindow?.ignoresMouseEvents = false
-            if !AppSettings.shared.autoPaste {
-                NSApp.deactivate()
-            }
+            // Hand focus back to the app the user was in so they can paste (Cmd+V).
+            NSApp.deactivate()
         }
     }
 

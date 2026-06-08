@@ -13,14 +13,6 @@ struct SettingsView: View {
 
             Section {
                 Toggle(L.launchAtLogin, isOn: $settings.launchAtLogin)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle(L.autoPaste, isOn: $settings.autoPaste)
-                    Text(L.autoPasteHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 Toggle(L.skipSensitive, isOn: $settings.skipSensitive)
             }
 
@@ -31,6 +23,17 @@ struct SettingsView: View {
                         Spacer()
                         Text("\(settings.maxItems)").foregroundStyle(.secondary)
                     }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Picker(L.autoDelete, selection: $settings.autoDeleteMinutes) {
+                        ForEach(AppSettings.retentionOptions, id: \.self) { minutes in
+                            Text(L.retentionLabel(minutes)).tag(minutes)
+                        }
+                    }
+                    Text(L.autoDeleteHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 

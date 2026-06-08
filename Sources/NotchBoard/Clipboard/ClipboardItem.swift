@@ -26,6 +26,9 @@ struct ClipboardItem: Identifiable, Equatable {
     var sourceAppIcon: NSImage?
     /// Whether the user starred this item.
     var isFavorite: Bool
+    /// Whether the user pinned this item: it floats to the top and is never
+    /// auto-removed (by trimming or time-based cleanup). Used for snippets.
+    var isPinned: Bool
     /// User-defined labels for categorization (e.g. "API", "key").
     var tags: [String]
 
@@ -38,6 +41,7 @@ struct ClipboardItem: Identifiable, Equatable {
         sourceAppName: String? = nil,
         sourceAppIcon: NSImage? = nil,
         isFavorite: Bool = false,
+        isPinned: Bool = false,
         tags: [String] = []
     ) {
         self.id = id
@@ -48,6 +52,7 @@ struct ClipboardItem: Identifiable, Equatable {
         self.sourceAppName = sourceAppName
         self.sourceAppIcon = sourceAppIcon
         self.isFavorite = isFavorite
+        self.isPinned = isPinned
         self.tags = tags
     }
 

@@ -39,6 +39,15 @@ enum L {
         }
     }
     static var copied: String { t("Copied", "Kopyalandı") }
+    static func copiedKind(_ kind: ClipboardItem.Kind) -> String {
+        switch kind {
+        case .text: return t("Text copied", "Metin kopyalandı")
+        case .link: return t("Link copied", "Link kopyalandı")
+        case .color: return t("Color copied", "Renk kopyalandı")
+        case .image: return t("Image copied", "Görsel kopyalandı")
+        case .file: return t("File copied", "Dosya kopyalandı")
+        }
+    }
     static var copy: String { t("Copy", "Kopyala") }
     static var delete: String { t("Delete", "Sil") }
     static var remove: String { t("Remove", "Kaldır") }
@@ -47,6 +56,13 @@ enum L {
     static var clearCurrentTab: String { t("Clear current tab", "Bu sekmeyi temizle") }
     static var pin: String { t("Add to Favorites", "Favorilere ekle") }
     static var unpin: String { t("Remove from Favorites", "Favorilerden çıkar") }
+    static var pinToTop: String { t("Pin to top", "Yukarı sabitle") }
+    static var unpinFromTop: String { t("Unpin", "Sabitlemeyi kaldır") }
+    static var newSnippet: String { t("New Snippet", "Yeni Snippet") }
+    static var newSnippetTitle: String { t("New snippet", "Yeni snippet") }
+    static var newSnippetHint: String { t("Save reusable text (signature, address, code). It stays pinned at the top.", "Tekrar kullanılabilir metin kaydet (imza, adres, kod). Üstte sabit kalır.") }
+    static var snippetPlaceholder: String { t("Type or paste your snippet…", "Snippet'ini yaz veya yapıştır…") }
+    static var save: String { t("Save", "Kaydet") }
     static var addTag: String { t("Add Tag…", "Etiket Ekle…") }
     static var addTagTitle: String { t("Add a tag", "Etiket ekle") }
     static var addTagHint: String { t("Type a label to organize this item, then press Add.", "Bu öğeyi düzenlemek için bir etiket yaz, sonra Ekle'ye bas.") }
@@ -69,11 +85,31 @@ enum L {
     static var settings: String { t("Settings", "Ayarlar") }
     static var settingsTitle: String { t("NotchBoard Settings", "NotchBoard Ayarları") }
     static var launchAtLogin: String { t("Launch at login", "Açılışta başlat") }
-    static var autoPaste: String { t("Auto-paste on select", "Seçince otomatik yapıştır") }
-    static var autoPasteHint: String { t("Requires Accessibility permission.", "Erişilebilirlik izni gerektirir.") }
     static var skipSensitive: String { t("Skip passwords / sensitive content", "Parola / hassas içeriği atla") }
     static var maxItems: String { t("Max history items", "Maksimum geçmiş öğesi") }
     static var hotkeyHint: String { t("Open with Cmd+Shift+V", "Cmd+Shift+V ile aç") }
+    static var autoDelete: String { t("Auto-delete history", "Geçmişi otomatik sil") }
+    static var autoDeleteHint: String { t("Pinned items and favorites are always kept.", "Sabitlenmiş öğeler ve favoriler her zaman korunur.") }
+    static func retentionLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: return t("Never", "Asla")
+        case 60: return t("After 1 hour", "1 saat sonra")
+        case 60 * 24: return t("After 1 day", "1 gün sonra")
+        case 60 * 24 * 7: return t("After 1 week", "1 hafta sonra")
+        case 60 * 24 * 30: return t("After 30 days", "30 gün sonra")
+        default: return "\(minutes) min"
+        }
+    }
+
+    // Onboarding
+    static var onboardingWelcomeTitle: String { t("Welcome to NotchBoard", "NotchBoard'a hoş geldin") }
+    static var onboardingWelcomeBody: String { t("Your clipboard history and a handy shelf, right under the notch. Move your mouse to the notch or press Cmd+Shift+V to open it.", "Pano geçmişin ve kullanışlı bir raf, tam notch'un altında. Açmak için fareyi notch'a götür ya da Cmd+Shift+V'ye bas.") }
+    static var onboardingDoneTitle: String { t("You're all set", "Her şey hazır") }
+    static var onboardingDoneBody: String { t("Copy anything and it'll appear in History. Pin frequently used text as snippets, and drop files onto the notch to stash them on the Shelf.", "Bir şey kopyala, Geçmiş'te görünsün. Sık kullandığın metinleri snippet olarak sabitle, dosyaları notch'a bırakıp Raf'ta sakla.") }
+    static var next: String { t("Next", "İleri") }
+    static var back: String { t("Back", "Geri") }
+    static var getStarted: String { t("Get Started", "Başla") }
+    static var setupGuide: String { t("Setup Guide", "Kurulum Rehberi") }
 
     // Menu
     static var toggleNotch: String { t("Toggle NotchBoard", "NotchBoard'u Aç/Kapat") }

@@ -54,6 +54,9 @@ struct HistoryView: View {
                             }
                             .contextMenu {
                                 Button(L.copy) { viewModel.selectAndCopy(item) }
+                                Button(item.isPinned ? L.unpinFromTop : L.pinToTop) {
+                                    viewModel.clipboard.togglePin(item)
+                                }
                                 Button(item.isFavorite ? L.unpin : L.pin) {
                                     viewModel.clipboard.toggleFavorite(item)
                                 }
@@ -131,6 +134,9 @@ private struct ClipboardCard: View {
                 .strokeBorder(borderColor, lineWidth: (isCopied || isSelected) ? 2 : 1)
         )
         .overlay(alignment: .topTrailing) { favoriteButton }
+        .overlay(alignment: .topLeading) {
+            if item.isPinned { pinBadge }
+        }
         .overlay {
             if isCopied { copiedBadge }
         }
@@ -208,6 +214,16 @@ private struct ClipboardCard: View {
         }
     }
 
+    private var pinBadge: some View {
+        Image(systemName: "pin.fill")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(5)
+            .background(Color.accentColor, in: Circle())
+            .padding(6)
+            .rotationEffect(.degrees(45))
+    }
+
     private var favoriteButton: some View {
         Button(action: onToggleFavorite) {
             Image(systemName: item.isFavorite ? "star.fill" : "star")
@@ -254,7 +270,7 @@ private struct ClipboardCard: View {
         case .link:
             LinkPreview(urlString: item.text ?? "")
         case .text:
-            textPreview(icon: nil)
+            textPreview(icon: item.isPinned ? "pin.fill" : nil)
         }
     }
 
@@ -437,27 +453,79 @@ private struct DragPreview: View {
     }
 }
 
-/// Centered placeholder shown when a tab has no content.
+/// Centered, illustrated placeholder shown when a tab has no content. The icon
+/// sits on a soft gradient halo and gently breathes/floats; the whole thing
+/// fades and scales in for a polished empty state.
 struct EmptyState: View {
     let icon: String
     let title: String
     let subtitle: String
 
+    @State private var appeared = false
+    @State private var floating = false
+
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 34))
-                .foregroundStyle(.secondary)
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-            Text(subtitle)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        VStack(spacing: 16) {
+            illustration
+            VStack(spacing: 7) {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                Text(subtitle)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 280)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(30)
+        .opacity(appeared ? 1 : 0)
+        .scaleEffect(appeared ? 1 : 0.92)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { appeared = true }
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+                floating = true
+            }
+        }
+    }
+
+    private var illustration: some View {
+        ZStack {
+            // Soft layered halo behind the glyph.
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.accentColor.opacity(0.28), .clear],
+                        center: .center, startRadius: 2, endRadius: 70
+                    )
+                )
+                .frame(width: 150, height: 150)
+                .scaleEffect(floating ? 1.06 : 0.94)
+
+            Circle()
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.16), .white.opacity(0.02)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+                .background(Circle().fill(Color.white.opacity(0.04)))
+                .frame(width: 92, height: 92)
+
+            Image(systemName: icon)
+                .font(.system(size: 36, weight: .medium))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.white.opacity(0.95), Color.accentColor.opacity(0.85)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .symbolRenderingMode(.hierarchical)
+        }
+        .offset(y: floating ? -5 : 5)
     }
 }
 

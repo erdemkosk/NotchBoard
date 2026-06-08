@@ -129,8 +129,32 @@ struct ExpandedPanel: View {
                 }
             }
             Spacer()
+            if viewModel.selectedTab == .history {
+                snippetButton
+            }
             clearButton
         }
+    }
+
+    @ViewBuilder
+    private var snippetButton: some View {
+        Button {
+            if let text = SnippetPrompt.run() {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    viewModel.clipboard.addSnippet(text)
+                    viewModel.selectedIndex = 0
+                }
+            }
+        } label: {
+            Image(systemName: "text.badge.plus")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(8)
+                .background(Color.white.opacity(0.06))
+                .clipShape(Circle())
+        }
+        .buttonStyle(PressableButtonStyle())
+        .help(L.newSnippet)
     }
 
     private var kindFilterBar: some View {
@@ -314,7 +338,9 @@ private struct TabChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: tab.systemImage)
+                    .font(.system(size: 13, weight: .semibold))
                 Text(tab.title)
                     .font(.system(size: 14, weight: .medium))
                 if count > 0 {

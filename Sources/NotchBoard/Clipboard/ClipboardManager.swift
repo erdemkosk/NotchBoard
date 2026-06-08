@@ -30,6 +30,8 @@ final class ClipboardManager: ObservableObject {
         loadFromDisk()
     }
 
+    private var cleanupTimer: Timer?
+
     func start() {
         guard timer == nil else { return }
         lastChangeCount = pasteboard.changeCount
@@ -38,11 +40,21 @@ final class ClipboardManager: ObservableObject {
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
+
+        // Apply the retention rule immediately and then on a slow cadence.
+        purgeExpired()
+        let c = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.purgeExpired() }
+        }
+        RunLoop.main.add(c, forMode: .common)
+        cleanupTimer = c
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        cleanupTimer?.invalidate()
+        cleanupTimer = nil
     }
 
     /// Writes an item back to the pasteboard (used when a card is clicked).
@@ -148,6 +160,45 @@ final class ClipboardManager: ObservableObject {
         persist()
     }
 
+    func togglePin(_ item: ClipboardItem) {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[idx].isPinned.toggle()
+        persist()
+    }
+
+    /// Creates a pinned text snippet (signature, address, code, …) that stays put
+    /// and never gets trimmed or auto-deleted.
+    @discardableResult
+    func addSnippet(_ text: String) -> ClipboardItem? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let item = ClipboardItem(
+            kind: classifyText(trimmed),
+            text: text,
+            sourceAppName: "NotchBoard",
+            isPinned: true
+        )
+        items.insert(item, at: 0)
+        persist()
+        return item
+    }
+
+    /// Removes non-pinned, non-favorite items older than the configured retention
+    /// window. A window of 0 means "keep forever".
+    func purgeExpired() {
+        let minutes = AppSettings.shared.autoDeleteMinutes
+        guard minutes > 0 else { return }
+        let cutoff = Date().addingTimeInterval(-Double(minutes) * 60)
+        var changed = false
+        items.removeAll { item in
+            guard !item.isPinned, !item.isFavorite, item.createdAt < cutoff else { return false }
+            if let url = item.fileURL { try? FileManager.default.removeItem(at: url) }
+            changed = true
+            return true
+        }
+        if changed { persist() }
+    }
+
     func addTag(_ tag: String, to item: ClipboardItem) {
         let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
@@ -200,17 +251,17 @@ final class ClipboardManager: ObservableObject {
         onCapture?(item)
     }
 
-    /// Trims to maxItems but never drops favorites.
+    /// Trims to maxItems but never drops favorites or pinned snippets.
     private func trimIfNeeded() {
         guard items.count > maxItems else { return }
         var kept: [ClipboardItem] = []
-        var nonFavoriteCount = 0
+        var trimmableCount = 0
         for item in items {
-            if item.isFavorite {
+            if item.isFavorite || item.isPinned {
                 kept.append(item)
-            } else if nonFavoriteCount < maxItems {
+            } else if trimmableCount < maxItems {
                 kept.append(item)
-                nonFavoriteCount += 1
+                trimmableCount += 1
             } else if let url = item.fileURL {
                 try? FileManager.default.removeItem(at: url)
             }
@@ -237,6 +288,7 @@ final class ClipboardManager: ObservableObject {
         let text: String?
         let fileName: String?
         var isFavorite: Bool = false
+        var isPinned: Bool = false
         var tags: [String] = []
     }
 
@@ -249,6 +301,7 @@ final class ClipboardManager: ObservableObject {
                 text: item.text,
                 fileName: item.fileURL?.lastPathComponent,
                 isFavorite: item.isFavorite,
+                isPinned: item.isPinned,
                 tags: item.tags
             )
         }
@@ -274,6 +327,7 @@ final class ClipboardManager: ObservableObject {
                 text: s.text,
                 fileURL: fileURL,
                 isFavorite: s.isFavorite,
+                isPinned: s.isPinned,
                 tags: s.tags
             )
         }
