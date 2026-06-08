@@ -101,7 +101,7 @@ struct ClipboardItem: Identifiable, Equatable {
     var subtitle: String {
         switch kind {
         case .text: return "Text"
-        case .link: return linkHost ?? "Link"
+        case .link: return linkDisplay ?? "Link"
         case .image: return "Image"
         case .file: return fileURL?.pathExtension.uppercased() ?? "File"
         case .color: return text ?? "Color"
@@ -113,5 +113,21 @@ struct ClipboardItem: Identifiable, Equatable {
         guard kind == .link, let text,
               let host = URL(string: text)?.host else { return nil }
         return host.replacingOccurrences(of: "www.", with: "")
+    }
+
+    /// Readable full link (host + path + query) without the scheme or "www.",
+    /// so different pages on the same site stay distinguishable on the card.
+    var linkDisplay: String? {
+        guard kind == .link, let text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var display = trimmed
+        if let range = display.range(of: "://") {
+            display = String(display[range.upperBound...])
+        }
+        if display.lowercased().hasPrefix("www.") {
+            display = String(display.dropFirst(4))
+        }
+        while display.hasSuffix("/") { display.removeLast() }
+        return display.isEmpty ? linkHost : display
     }
 }

@@ -289,6 +289,7 @@ private struct ClipboardCard: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .truncationMode(item.kind == .link ? .middle : .tail)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
