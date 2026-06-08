@@ -1,0 +1,53 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Compute version
+        id: version
+        run: |
+          BASE="$(cat VERSION | tr -d '[:space:]')"
+          VERSION="${BASE}.${GITHUB_RUN_NUMBER}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version ${VERSION}"
+
+      - name: Build app bundle
+        env:
+          NB_VERSION: ${{ steps.version.outputs.version }}
+          NB_BUILD: ${{ github.run_number }}
+        run: |
+          chmod +x make-app.sh
+          ./make-app.sh release
+
+      - name: Zip app
+        run: |
+          ditto -c -k --keepParent "dist/NotchBoard.app" "NotchBoard.zip"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.DEPLOY_TOKEN }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: NotchBoard ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: NotchBoard.zip
