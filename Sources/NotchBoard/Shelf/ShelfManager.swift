@@ -99,7 +99,7 @@ final class ShelfManager: ObservableObject {
 
     /// Filename without its extension and trailing copy suffixes the OS or our own
     /// `uniqueDestination` adds (e.g. "report-1", "report 2", "report copy").
-    private static func baseName(_ name: String) -> String {
+    private nonisolated static func baseName(_ name: String) -> String {
         var b = (name as NSString).deletingPathExtension.lowercased()
         b = b.replacingOccurrences(
             of: #"[ \-_]*(copy|kopya|\d+)$"#,
