@@ -38,6 +38,24 @@ The app runs as a menu-bar accessory (no Dock icon). Use the menu-bar icon to
 toggle the panel or quit. On Macs without a hardware notch, a small pill appears
 centered under the menu bar as the trigger.
 
+## Installation (downloaded release)
+
+NotchBoard is only ad-hoc signed (not notarized with a paid Developer ID), so
+macOS Gatekeeper will warn that the app is "damaged" or "from an unidentified
+developer" the first time you open a downloaded build. This is expected.
+
+To remove the quarantine flag and run it, move `NotchBoard.app` to
+`/Applications` and run:
+
+```bash
+xattr -cr /Applications/NotchBoard.app
+open /Applications/NotchBoard.app
+```
+
+`xattr -cr` clears the `com.apple.quarantine` attribute that macOS adds to apps
+downloaded from the internet. You only need to do this once per download. If you
+build the app yourself with `./make-app.sh`, this step is not needed.
+
 ## Project layout
 
 ```
