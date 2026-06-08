@@ -65,13 +65,23 @@ struct SettingsView: View {
             Text(L.developer)
                 .font(.system(size: 16, weight: .semibold))
 
-            Button {
-                NSWorkspace.shared.open(AppInfo.releasesURL)
-            } label: {
-                Label(L.viewOnGitHub, systemImage: "link")
-                    .font(.caption)
+            HStack(spacing: 16) {
+                Button {
+                    NSWorkspace.shared.open(AppInfo.releasesURL)
+                } label: {
+                    Label(L.viewOnGitHub, systemImage: "link")
+                        .font(.caption)
+                }
+                .buttonStyle(.link)
+
+                Button {
+                    NSWorkspace.shared.open(AppInfo.websiteURL)
+                } label: {
+                    Label(L.visitWebsite, systemImage: "globe")
+                        .font(.caption)
+                }
+                .buttonStyle(.link)
             }
-            .buttonStyle(.link)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 6)

@@ -1,4 +1,8 @@
-# NotchBoard
+<p align="center">
+  <img src="docs/assets/logo.png" alt="NotchBoard logo" width="160" height="160" />
+</p>
+
+<h1 align="center">NotchBoard</h1>
 
 A native macOS menu-bar/notch utility. Move the mouse to the notch and a panel
 expands with two tabs:

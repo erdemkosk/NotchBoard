@@ -130,6 +130,20 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         triggerWindow?.setFrame(triggerRect(), display: true)
     }
 
+    /// Re-anchors the panel (and trigger zone) to the screen the user is currently
+    /// on, so summoning it from another display slides it down there instead of
+    /// always on the hardware-notch screen.
+    private func moveToActiveScreen() {
+        let active = NotchScreenMetrics.active
+        guard active.screen.frame != metrics.screen.frame else { return }
+        metrics = active
+        viewModel.updateMetrics(metrics)
+        let frame = windowFrame(for: metrics)
+        window?.setFrame(frame, display: false)
+        window?.contentView?.frame = NSRect(origin: .zero, size: frame.size)
+        triggerWindow?.setFrame(triggerRect(), display: false)
+    }
+
     // MARK: - NotchTriggerDelegate
 
     func triggerActivated(dragging: Bool) {
@@ -188,6 +202,9 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
             viewModel.previousApp = front
         }
         viewModel.selectedIndex = 0
+        // Slide down on whichever display the user is currently on (e.g. when the
+        // panel is summoned via the keyboard shortcut from a secondary screen).
+        moveToActiveScreen()
         // Hand event handling to the panel; stop the tiny trigger from intercepting.
         triggerWindow?.ignoresMouseEvents = true
         window?.ignoresMouseEvents = false

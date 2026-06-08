@@ -49,6 +49,7 @@ enum L {
     static var unpin: String { t("Remove from Favorites", "Favorilerden çıkar") }
     static var addTag: String { t("Add Tag…", "Etiket Ekle…") }
     static var addTagTitle: String { t("Add a tag", "Etiket ekle") }
+    static var addTagHint: String { t("Type a label to organize this item, then press Add.", "Bu öğeyi düzenlemek için bir etiket yaz, sonra Ekle'ye bas.") }
     static var tagPlaceholder: String { t("e.g. API, key, work", "ör. API, anahtar, iş") }
     static var add: String { t("Add", "Ekle") }
     static var cancel: String { t("Cancel", "İptal") }
@@ -93,4 +94,5 @@ enum L {
     static let developer = "Mustafa Erdem Köşk"
     static var developedWithLove: String { t("Developed with", "Sevgiyle geliştirildi") }
     static var viewOnGitHub: String { t("View on GitHub", "GitHub'da görüntüle") }
+    static var visitWebsite: String { t("Visit Website", "Web sitesini ziyaret et") }
 }

@@ -18,4 +18,9 @@ enum AppInfo {
     static var releasesURL: URL {
         URL(string: "https://github.com/\(repo)/releases")!
     }
+
+    /// Developer's personal website.
+    static var websiteURL: URL {
+        URL(string: "https://www.erdemkosk.com")!
+    }
 }

@@ -48,6 +48,18 @@ struct NotchScreenMetrics {
         return NotchScreenMetrics(screen: screen)
     }
 
+    /// Metrics for the screen the user is currently working on: the screen that
+    /// contains the mouse cursor, falling back to the primary notch screen. This
+    /// lets the panel slide down on whichever display is active when summoned by
+    /// the keyboard shortcut.
+    static var active: NotchScreenMetrics {
+        let mouse = NSEvent.mouseLocation
+        if let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) {
+            return NotchScreenMetrics(screen: screen)
+        }
+        return primary
+    }
+
     /// Centered frame (in screen coordinates) for the closed notch pill.
     func closedFrame(width: CGFloat, height: CGFloat) -> NSRect {
         let f = screen.frame

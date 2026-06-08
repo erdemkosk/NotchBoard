@@ -79,13 +79,28 @@ enum TagPrompt {
     static func run() -> String? {
         let alert = NSAlert()
         alert.messageText = L.addTagTitle
+        alert.informativeText = L.addTagHint
         alert.addButton(withTitle: L.add)
         alert.addButton(withTitle: L.cancel)
 
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         field.placeholderString = L.tagPlaceholder
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
+
+        // The notch panel sits at `.statusBar` level, so a default alert would be
+        // hidden behind it. Float above the panel and drop the dialog lower-center
+        // on the active screen so it's clearly visible.
+        let win = alert.window
+        win.level = .popUpMenu
+        DispatchQueue.main.async {
+            let screen = NotchScreenMetrics.active.screen
+            let sf = screen.frame
+            let size = win.frame.size
+            let x = sf.midX - size.width / 2
+            let y = sf.midY - size.height / 2 - 80
+            win.setFrameOrigin(NSPoint(x: x, y: y))
+        }
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else { return nil }

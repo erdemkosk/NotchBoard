@@ -101,10 +101,17 @@ struct ClipboardItem: Identifiable, Equatable {
     var subtitle: String {
         switch kind {
         case .text: return "Text"
-        case .link: return "Link"
+        case .link: return linkHost ?? "Link"
         case .image: return "Image"
         case .file: return fileURL?.pathExtension.uppercased() ?? "File"
         case .color: return text ?? "Color"
         }
+    }
+
+    /// Host portion of a link item (e.g. "erdemkosk.com"), without "www.".
+    var linkHost: String? {
+        guard kind == .link, let text,
+              let host = URL(string: text)?.host else { return nil }
+        return host.replacingOccurrences(of: "www.", with: "")
     }
 }
