@@ -126,6 +126,17 @@ private struct ClipboardCard: View {
         }
         .scaleEffect(isCopied ? 0.96 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isCopied)
+        .help(helpText)
+    }
+
+    /// Full, untruncated text shown as a native tooltip on hover (e.g. the
+    /// complete URL for links).
+    private var helpText: String {
+        switch item.kind {
+        case .link: return item.text ?? item.subtitle
+        case .text, .file, .color: return item.text ?? item.subtitle
+        case .image: return item.subtitle
+        }
     }
 
     private var tagRow: some View {
