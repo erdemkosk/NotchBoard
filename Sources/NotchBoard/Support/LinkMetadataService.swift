@@ -23,10 +23,13 @@ final class LinkMetadataService: ObservableObject {
         inFlight.insert(urlString)
 
         Self.loadMetadata(for: url) { [weak self] title, image in
+            // NSImage is not Sendable on every SDK, so silence the region-based
+            // sending check explicitly before hopping back to the main actor.
+            nonisolated(unsafe) let img = image
             Task { @MainActor in
                 guard let self else { return }
                 self.inFlight.remove(urlString)
-                self.cache[urlString] = Meta(title: title, image: image)
+                self.cache[urlString] = Meta(title: title, image: img)
             }
         }
     }
