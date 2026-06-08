@@ -4,6 +4,7 @@ import SwiftUI
 /// out to other apps.
 struct HistoryView: View {
     @ObservedObject var viewModel: NotchViewModel
+    @State private var hoveredID: UUID?
 
     private let columns = [GridItem(.adaptive(minimum: 210, maximum: 260), spacing: 14)]
 
@@ -32,10 +33,16 @@ struct HistoryView: View {
                                 item: item,
                                 isCopied: viewModel.lastCopiedID == item.id,
                                 isSelected: viewModel.selectedIndex == index,
+                                isHovered: hoveredID == item.id,
                                 onToggleFavorite: { viewModel.clipboard.toggleFavorite(item) }
                             )
                             .id(item.id)
+                            .zIndex(hoveredID == item.id ? 10 : 0)
                             .hoverFeedback()
+                            .onHover { inside in
+                                if inside { hoveredID = item.id }
+                                else if hoveredID == item.id { hoveredID = nil }
+                            }
                             .onTapGesture {
                                 viewModel.selectAndCopy(item)
                             }
@@ -97,7 +104,10 @@ private struct ClipboardCard: View {
     let item: ClipboardItem
     var isCopied: Bool = false
     var isSelected: Bool = false
+    var isHovered: Bool = false
     var onToggleFavorite: () -> Void = {}
+    @State private var showTooltip = false
+    @State private var tooltipTask: DispatchWorkItem?
 
     private var borderColor: Color {
         if isCopied { return .accentColor }
@@ -126,16 +136,55 @@ private struct ClipboardCard: View {
         }
         .scaleEffect(isCopied ? 0.96 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isCopied)
-        .help(helpText)
+        .overlay(alignment: .bottom) { tooltip }
+        .onChange(of: isHovered) { _, hovering in
+            if hovering {
+                let task = DispatchWorkItem {
+                    withAnimation(.easeOut(duration: 0.15)) { showTooltip = true }
+                }
+                tooltipTask = task
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: task)
+            } else {
+                tooltipTask?.cancel()
+                withAnimation(.easeOut(duration: 0.1)) { showTooltip = false }
+            }
+        }
     }
 
-    /// Full, untruncated text shown as a native tooltip on hover (e.g. the
+    /// Full, untruncated text revealed after hovering and waiting (e.g. the
     /// complete URL for links).
     private var helpText: String {
         switch item.kind {
-        case .link: return item.text ?? item.subtitle
-        case .text, .file, .color: return item.text ?? item.subtitle
         case .image: return item.subtitle
+        default: return item.text ?? item.subtitle
+        }
+    }
+
+    @ViewBuilder
+    private var tooltip: some View {
+        if showTooltip && !helpText.isEmpty && !isCopied {
+            Text(helpText)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.white)
+                .lineLimit(5)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.disabled)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .frame(maxWidth: 240, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.black.opacity(0.92))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                        )
+                )
+                .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+                .offset(y: 14)
+                .allowsHitTesting(false)
+                .transition(.opacity)
         }
     }
 
