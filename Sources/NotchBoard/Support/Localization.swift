@@ -39,6 +39,13 @@ enum L {
         }
     }
     static var copied: String { t("Copied", "Kopyalandı") }
+    static var copyPlain: String { t("Copy as plain text", "Düz metin olarak kopyala") }
+    static var transform: String { t("Transform", "Dönüştür") }
+    static var transformUppercase: String { t("UPPERCASE", "BÜYÜK HARF") }
+    static var transformLowercase: String { t("lowercase", "küçük harf") }
+    static var transformTrim: String { t("Trim whitespace", "Boşlukları kırp") }
+    static var transformJSON: String { t("Beautify JSON", "JSON güzelleştir") }
+    static var transformURLEncode: String { t("URL encode", "URL kodla") }
     static func copiedKind(_ kind: ClipboardItem.Kind) -> String {
         switch kind {
         case .text: return t("Text copied", "Metin kopyalandı")
@@ -81,18 +88,62 @@ enum L {
     static var emptyShelfTitle: String { t("Drop files here", "Dosyaları buraya bırak") }
     static var emptyShelfSubtitle: String { t("Drag images or files onto the notch to keep them handy, then drag them into any app.", "Görsel veya dosyaları notch'a sürükleyip sakla, sonra herhangi bir uygulamaya sürükle.") }
 
+    // Shelf collections
+    static var shelfDefaultName: String { t("Shelf", "Raf") }
+    static var newCollection: String { t("New collection", "Yeni koleksiyon") }
+    static var newCollectionTitle: String { t("New collection", "Yeni koleksiyon") }
+    static var newCollectionHint: String { t("Name this shelf (e.g. Design, Work, Temp).", "Bu rafa bir ad ver (ör. Tasarım, İş, Geçici).") }
+    static var collectionPlaceholder: String { t("e.g. Design, Work", "ör. Tasarım, İş") }
+    static var renameCollection: String { t("Rename…", "Yeniden adlandır…") }
+    static var recolorCollection: String { t("Color", "Renk") }
+    static var deleteCollection: String { t("Delete collection", "Koleksiyonu sil") }
+    static var moveToCollection: String { t("Move to", "Taşı") }
+    static var noOtherCollections: String { t("No other collections", "Başka koleksiyon yok") }
+    static func colorName(_ hex: String) -> String {
+        switch hex.uppercased() {
+        case "#34C759": return t("Green", "Yeşil")
+        case "#0A84FF": return t("Blue", "Mavi")
+        case "#FF9F0A": return t("Orange", "Turuncu")
+        case "#FF375F": return t("Pink", "Pembe")
+        case "#BF5AF2": return t("Purple", "Mor")
+        case "#5AC8FA": return t("Teal", "Camgöbeği")
+        case "#FFD60A": return t("Yellow", "Sarı")
+        case "#8E8E93": return t("Gray", "Gri")
+        default: return hex
+        }
+    }
+
+    // Shelf batch actions
+    static var share: String { t("Share…", "Paylaş…") }
+    static var zipSelected: String { t("Zip selected", "Seçilenleri sıkıştır") }
+    static var dragOutSelected: String { t("Drag selected out", "Seçilenleri sürükle") }
+    static func selectedCount(_ n: Int) -> String { t("\(n) selected", "\(n) seçili") }
+
     // Settings
     static var settings: String { t("Settings", "Ayarlar") }
     static var settingsTitle: String { t("NotchBoard Settings", "NotchBoard Ayarları") }
     static var launchAtLogin: String { t("Launch at login", "Açılışta başlat") }
     static var skipSensitive: String { t("Skip passwords / sensitive content", "Parola / hassas içeriği atla") }
     static var maxItems: String { t("Max history items", "Maksimum geçmiş öğesi") }
-    static var hotkeyHint: String { t("Open with Cmd+Shift+V", "Cmd+Shift+V ile aç") }
+    static var hotkeyHint: String { t("Open with Keyboard Shortcut", "Klavye Kısayolu ile aç") }
     static var autoDelete: String { t("Auto-delete history", "Geçmişi otomatik sil") }
     static var autoDeleteHint: String { t("Pinned items and favorites are always kept.", "Sabitlenmiş öğeler ve favoriler her zaman korunur.") }
+    static var keyboardShortcut: String { t("Keyboard Shortcut", "Klavye Kısayolu") }
+    static var autoPaste: String { t("Auto-Paste copied item", "Otomatik Yapıştırma") }
+    static var autoPasteHint: String { t("Automatically paste the clicked/selected item into the frontmost app. Requires Accessibility permission.", "Tıklanan veya seçilen öğeyi o an aktif olan uygulamaya otomatik olarak yapıştırır. Erişilebilirlik izni gerektirir.") }
+
+    // Trigger pill (non-notch screens)
+    static var triggerPillSection: String { t("Trigger pill (screens without a notch)", "Tetikleyici pil (notch'suz ekranlar)") }
+    static var pillWidth: String { t("Width", "Genişlik") }
+    static var pillHeight: String { t("Height", "Yükseklik") }
+    static var pillCorner: String { t("Corner radius", "Köşe yuvarlaklığı") }
+    static var pillHint: String { t("Customizes the pill shown under the menu bar on Macs and displays without a hardware notch.", "Donanım notch'u olmayan Mac ve ekranlarda menü çubuğu altında görünen pili özelleştirir.") }
     static func retentionLabel(_ minutes: Int) -> String {
         switch minutes {
         case 0: return t("Never", "Asla")
+        case 5: return t("After 5 minutes", "5 dakika sonra")
+        case 15: return t("After 15 minutes", "15 dakika sonra")
+        case 30: return t("After 30 minutes", "30 dakika sonra")
         case 60: return t("After 1 hour", "1 saat sonra")
         case 60 * 24: return t("After 1 day", "1 gün sonra")
         case 60 * 24 * 7: return t("After 1 week", "1 hafta sonra")

@@ -30,6 +30,57 @@ final class NotchViewModel: ObservableObject {
     @Published var selectedTab: NotchTab = .history
     @Published var searchText: String = ""
     @Published var showFavoritesOnly: Bool = false
+    @Published var unlockedCollectionIDs: Set<UUID> = []
+
+    /// Set when the panel is summoned via the keyboard shortcut so the expanded
+    /// panel focuses the search field on appear (lets the user type immediately).
+    @Published var pendingSearchFocus = false
+
+    /// Quick text transforms available from a card's context menu.
+    enum TextTransform: String, CaseIterable, Identifiable {
+        case uppercase, lowercase, trim, jsonPretty, urlEncode
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .uppercase: return L.transformUppercase
+            case .lowercase: return L.transformLowercase
+            case .trim: return L.transformTrim
+            case .jsonPretty: return L.transformJSON
+            case .urlEncode: return L.transformURLEncode
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .uppercase: return "textformat.size.larger"
+            case .lowercase: return "textformat.size.smaller"
+            case .trim: return "scissors"
+            case .jsonPretty: return "curlybraces"
+            case .urlEncode: return "link"
+            }
+        }
+
+        func apply(_ s: String) -> String? {
+            switch self {
+            case .uppercase: return s.uppercased()
+            case .lowercase: return s.lowercased()
+            case .trim: return s.trimmingCharacters(in: .whitespacesAndNewlines)
+            case .jsonPretty:
+                guard let data = s.data(using: .utf8),
+                      let obj = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]),
+                      let pretty = try? JSONSerialization.data(
+                        withJSONObject: obj,
+                        options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                      ),
+                      let out = String(data: pretty, encoding: .utf8)
+                else { return nil }
+                return out
+            case .urlEncode:
+                return s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            }
+        }
+    }
 
     /// Active type filter for the history grid (nil = all kinds).
     @Published var selectedKind: ClipboardItem.Kind?
@@ -50,9 +101,13 @@ final class NotchViewModel: ObservableObject {
     @Published var hudItem: ClipboardItem?
     private var hudWorkItem: DispatchWorkItem?
 
+    /// Increments on each capture to trigger a brief glow pulse on the notch.
+    @Published var capturePulse = 0
+
     /// Shows the capture HUD for ~1.6s (skipped while the panel is open).
     func showCaptureHUD(_ item: ClipboardItem) {
         guard !isOpen else { return }
+        capturePulse += 1
         hudWorkItem?.cancel()
         withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
             hudItem = item
@@ -64,6 +119,21 @@ final class NotchViewModel: ObservableObject {
         }
         hudWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: work)
+    }
+
+    func hudHoverChanged(_ hovering: Bool) {
+        if hovering {
+            hudWorkItem?.cancel()
+        } else {
+            hudWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self?.hudItem = nil
+                }
+            }
+            hudWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+        }
     }
 
     /// Set by the window controller so views can ask the panel to collapse.
@@ -121,6 +191,25 @@ final class NotchViewModel: ObservableObject {
     /// The user then pastes it manually wherever they want (Cmd+V).
     func selectAndCopy(_ item: ClipboardItem) {
         clipboard.copyToPasteboard(item)
+        finishCopy(item)
+    }
+
+    /// Copies only the plain-text form of an item, then closes the panel.
+    func copyPlain(_ item: ClipboardItem) {
+        clipboard.copyAsPlainText(item)
+        finishCopy(item)
+    }
+
+    /// Applies a quick text transform to the item's text, replaces the stored
+    /// item's data with the transformed result, and copies it to the pasteboard.
+    func copyTransformed(_ item: ClipboardItem, _ transform: TextTransform) {
+        guard let text = item.text, let out = transform.apply(text) else { return }
+        clipboard.copyString(out)
+        clipboard.updateText(out, for: item)
+        finishCopy(item)
+    }
+
+    private func finishCopy(_ item: ClipboardItem) {
         lastCopiedID = item.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.lastCopiedID = nil
@@ -156,6 +245,8 @@ final class NotchViewModel: ObservableObject {
     @Published var notchWidth: CGFloat = NotchScreenMetrics.virtualNotchWidth
     @Published var notchHeight: CGFloat = 32
     @Published var hasHardwareNotch: Bool = false
+    /// Corner radius for the closed pill (customizable on non-notch screens).
+    @Published var pillCornerRadius: CGFloat = 12
 
     // Adjustable, persisted size of the expanded panel.
     @Published var openWidth: CGFloat = CGFloat(AppSettings.defaultPanelWidth)
@@ -196,8 +287,17 @@ final class NotchViewModel: ObservableObject {
     }
 
     func updateMetrics(_ metrics: NotchScreenMetrics) {
-        notchWidth = metrics.notchWidth
-        notchHeight = metrics.notchHeight
         hasHardwareNotch = metrics.hasHardwareNotch
+        if metrics.hasHardwareNotch {
+            notchWidth = metrics.notchWidth
+            notchHeight = metrics.notchHeight
+            pillCornerRadius = 12
+        } else {
+            // Apply the user's custom virtual-pill appearance.
+            let settings = AppSettings.shared
+            notchWidth = CGFloat(settings.triggerPillWidth)
+            notchHeight = CGFloat(settings.triggerPillHeight)
+            pillCornerRadius = CGFloat(settings.triggerPillCornerRadius)
+        }
     }
 }

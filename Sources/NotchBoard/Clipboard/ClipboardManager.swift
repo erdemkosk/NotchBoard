@@ -59,10 +59,14 @@ final class ClipboardManager: ObservableObject {
 
     /// Writes an item back to the pasteboard (used when a card is clicked).
     func copyToPasteboard(_ item: ClipboardItem) {
+        let prevClipboard = pasteboard.string(forType: .string) ?? ""
         pasteboard.clearContents()
         switch item.kind {
         case .text, .link, .color:
-            if let text = item.text { pasteboard.setString(text, forType: .string) }
+            if let text = item.text {
+                let resolved = resolveTemplates(text, prevClipboard: prevClipboard)
+                pasteboard.setString(resolved, forType: .string)
+            }
         case .image:
             if let url = item.fileURL, let image = NSImage(contentsOf: url) {
                 pasteboard.writeObjects([image])
@@ -72,6 +76,52 @@ final class ClipboardManager: ObservableObject {
         }
         // Avoid re-capturing our own write.
         lastChangeCount = pasteboard.changeCount
+    }
+
+    /// Writes only the item's plain-text payload to the pasteboard, stripping any
+    /// rich representation. For files this copies the path as text.
+    func copyAsPlainText(_ item: ClipboardItem) {
+        guard let text = item.text else { return }
+        let prevClipboard = pasteboard.string(forType: .string) ?? ""
+        let resolved = resolveTemplates(text, prevClipboard: prevClipboard)
+        copyString(resolved)
+    }
+
+    private func resolveTemplates(_ text: String, prevClipboard: String) -> String {
+        var resolved = text
+
+        // 1. Resolve {date}
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = dateFormatter.string(from: Date())
+        resolved = resolved.replacingOccurrences(of: "{date}", with: dateStr)
+
+        // 2. Resolve {time}
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm"
+        let timeStr = timeFormatter.string(from: Date())
+        resolved = resolved.replacingOccurrences(of: "{time}", with: timeStr)
+
+        // 3. Resolve {clipboard}
+        resolved = resolved.replacingOccurrences(of: "{clipboard}", with: prevClipboard)
+
+        return resolved
+    }
+
+    /// Writes a raw string to the pasteboard as plain text.
+    func copyString(_ text: String) {
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        lastChangeCount = pasteboard.changeCount
+    }
+
+    /// Replaces an item's text in place (used by quick transforms) and persists.
+    /// `kind` is immutable, so only the payload text changes.
+    func updateText(_ newText: String, for item: ClipboardItem) {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        guard items[idx].text != newText else { return }
+        items[idx].text = newText
+        persist()
     }
 
     func remove(_ item: ClipboardItem) {

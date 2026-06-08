@@ -35,6 +35,37 @@ BUILD_NUMBER="${NB_BUILD:-0}"
     || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $BUILD_NUMBER" "$PLIST"
 echo "==> Version $SHORT_VERSION (build $BUILD_NUMBER)"
 
+# Build + embed the Finder extension (.appex) for the "Send to NotchBoard"
+# right-click menu. Non-fatal: the main app still ships if this step fails.
+echo "==> Building Finder extension"
+EXT_NAME="NotchBoardFinder"
+EXT_SRC="$ROOT/FinderExtension/FinderSync.swift"
+APPEX_DIR="$APP_DIR/Contents/PlugIns/$EXT_NAME.appex"
+ARCH="$(uname -m)"
+if SDK_PATH="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null)" && [ -f "$EXT_SRC" ]; then
+    mkdir -p "$APPEX_DIR/Contents/MacOS"
+    mkdir -p "$APPEX_DIR/Contents/Resources"
+    if swiftc \
+        -target "${ARCH}-apple-macosx14.0" \
+        -sdk "$SDK_PATH" \
+        -module-name "$EXT_NAME" \
+        -framework FinderSync \
+        -O \
+        -o "$APPEX_DIR/Contents/MacOS/$EXT_NAME" \
+        "$EXT_SRC"; then
+        cp "$ROOT/FinderExtension/Info.plist" "$APPEX_DIR/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $SHORT_VERSION" "$APPEX_DIR/Contents/Info.plist" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APPEX_DIR/Contents/Info.plist" 2>/dev/null || true
+        codesign --force --sign - "$APPEX_DIR" 2>/dev/null || true
+        echo "    Embedded $EXT_NAME.appex"
+    else
+        echo "   (Finder extension build failed; main app still assembled)"
+        rm -rf "$APP_DIR/Contents/PlugIns"
+    fi
+else
+    echo "   (skipping Finder extension; no macOS SDK or source found)"
+fi
+
 echo "==> Ad-hoc code signing"
 codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || \
     echo "   (codesign skipped/failed; app will still run locally)"

@@ -4,21 +4,40 @@ import SwiftUI
 struct ExpandedPanel: View {
     @ObservedObject var viewModel: NotchViewModel
     @State private var resizeBase: CGSize?
+    @FocusState private var searchFocused: Bool
+
+    /// Vertical space reserved at the top so search + History/Shelf tabs never
+    /// sit under the hardware notch.
+    private var headerClearance: CGFloat {
+        viewModel.notchHeight + 10
+    }
 
     var body: some View {
         VStack(spacing: 12) {
-            searchBar
             tabBar
-            if viewModel.selectedTab == .history && !viewModel.availableKinds.isEmpty {
-                kindFilterBar
+                .fixedSize(horizontal: false, vertical: true)
+
+            if viewModel.selectedTab == .history {
+                searchBar
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !viewModel.availableKinds.isEmpty {
+                    kindFilterBar
+                }
+            } else if viewModel.selectedTab == .shelf {
+                ShelfCollectionBar(viewModel: viewModel)
             }
+
             content
         }
-        .padding(18)
-        .padding(.top, 6)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 18)
+        .padding(.top, headerClearance)
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: viewModel.selectedTab)
         .frame(width: viewModel.openWidth, height: viewModel.openHeight)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(alignment: .top) { notchConnector }
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .strokeBorder(
@@ -30,10 +49,18 @@ struct ExpandedPanel: View {
                     lineWidth: 1
                 )
         )
-        .overlay(alignment: .top) { notchConnector }
         .overlay(alignment: .bottomTrailing) { resizeHandle }
         .shadow(color: .black.opacity(0.5), radius: 30, y: 14)
         .shadow(color: .accentColor.opacity(0.28), radius: 26, y: 6)
+        .onAppear {
+            guard viewModel.pendingSearchFocus else { return }
+            viewModel.pendingSearchFocus = false
+            // The panel mounts via a spring animation; defer a tick so the field
+            // exists and reliably accepts first responder.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                searchFocused = true
+            }
+        }
     }
 
     /// Black tab at the very top that blends the panel into the hardware notch.
@@ -95,6 +122,7 @@ struct ExpandedPanel: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
                 .foregroundStyle(.white)
+                .focused($searchFocused)
             if !viewModel.searchText.isEmpty {
                 Button {
                     viewModel.searchText = ""

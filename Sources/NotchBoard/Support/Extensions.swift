@@ -109,6 +109,45 @@ enum TagPrompt {
     }
 }
 
+/// Generic single-line text prompt (used for naming/renaming shelf collections).
+@MainActor
+enum TextPrompt {
+    static func run(
+        title: String,
+        hint: String,
+        placeholder: String,
+        initial: String = "",
+        confirm: String
+    ) -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = hint
+        alert.addButton(withTitle: confirm)
+        alert.addButton(withTitle: L.cancel)
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = placeholder
+        field.stringValue = initial
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        let win = alert.window
+        win.level = .popUpMenu
+        DispatchQueue.main.async {
+            let screen = NotchScreenMetrics.active.screen
+            let sf = screen.frame
+            let size = win.frame.size
+            win.setFrameOrigin(NSPoint(x: sf.midX - size.width / 2, y: sf.midY - size.height / 2 - 80))
+            field.selectText(nil)
+        }
+
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return nil }
+        let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+}
+
 /// Modal prompt for creating a reusable, pinned text snippet (multiline).
 @MainActor
 enum SnippetPrompt {

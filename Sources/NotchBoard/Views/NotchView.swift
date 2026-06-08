@@ -9,6 +9,13 @@ struct NotchView: View {
             // Transparent backdrop fills the window; only the panel is visible.
             Color.clear
 
+            // Soft glow that pulses around the notch on each capture.
+            CapturePulse(
+                trigger: viewModel.capturePulse,
+                width: viewModel.notchWidth,
+                height: viewModel.notchHeight
+            )
+
             if viewModel.isOpen {
                 ExpandedPanel(viewModel: viewModel)
                     .transition(
@@ -25,8 +32,24 @@ struct NotchView: View {
                 CaptureHUD(
                     item: hudItem,
                     notchWidth: viewModel.notchWidth,
-                    notchHeight: viewModel.notchHeight
+                    notchHeight: viewModel.notchHeight,
+                    onUndo: {
+                        withAnimation {
+                            viewModel.clipboard.remove(hudItem)
+                            viewModel.hudItem = nil
+                        }
+                    },
+                    onSendToShelf: {
+                        withAnimation {
+                            viewModel.shelf.add(from: hudItem)
+                            viewModel.hudItem = nil
+                        }
+                    },
+                    onHoverChanged: { hovering in
+                        viewModel.hudHoverChanged(hovering)
+                    }
                 )
+                .id(viewModel.capturePulse)
                 .transition(
                     .asymmetric(
                         insertion: .opacity,
@@ -47,12 +70,43 @@ struct NotchView: View {
     }
 }
 
+/// A brief accent-colored glow that blooms around the notch each time something
+/// is captured — a subtle pulse on top of the capture HUD.
+private struct CapturePulse: View {
+    let trigger: Int
+    let width: CGFloat
+    let height: CGFloat
+
+    @State private var opacity: Double = 0
+    @State private var scale: CGFloat = 1.0
+
+    var body: some View {
+        UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12)
+            .stroke(Color.accentColor, lineWidth: 2)
+            .frame(width: width, height: height)
+            .shadow(color: Color.accentColor.opacity(0.9), radius: 8)
+            .opacity(opacity)
+            .scaleEffect(scale, anchor: .top)
+            .allowsHitTesting(false)
+            .onChange(of: trigger) { _, _ in
+                guard trigger > 0 else { return }
+                opacity = 0.6
+                scale = 1.0
+                withAnimation(.easeOut(duration: 0.6)) {
+                    opacity = 0
+                    scale = 1.12
+                }
+            }
+    }
+}
+
 /// The collapsed state sitting under the hardware notch.
 private struct ClosedPill: View {
     @ObservedObject var viewModel: NotchViewModel
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let radius = viewModel.hasHardwareNotch ? 12 : viewModel.pillCornerRadius
+        return RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(Color.black)
             .frame(
                 width: viewModel.notchWidth,
@@ -70,8 +124,8 @@ private struct ClosedPill: View {
             .clipShape(
                 .rect(
                     topLeadingRadius: 0,
-                    bottomLeadingRadius: 12,
-                    bottomTrailingRadius: 12,
+                    bottomLeadingRadius: radius,
+                    bottomTrailingRadius: radius,
                     topTrailingRadius: 0
                 )
             )

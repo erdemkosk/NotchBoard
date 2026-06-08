@@ -6,7 +6,7 @@ struct HistoryView: View {
     @ObservedObject var viewModel: NotchViewModel
     @State private var hoveredID: UUID?
 
-    private let columns = [GridItem(.adaptive(minimum: 210, maximum: 260), spacing: 14)]
+    private let columns = [GridItem(.adaptive(minimum: 180, maximum: 250), spacing: 14)]
 
     private var filtered: [ClipboardItem] { viewModel.visibleHistory }
 
@@ -27,8 +27,9 @@ struct HistoryView: View {
             } else {
                 ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(Array(filtered.enumerated()), id: \.element.id) { index, item in
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                        ForEach(filtered) { item in
+                            let index = filtered.firstIndex(of: item) ?? 0
                             ClipboardCard(
                                 item: item,
                                 isCopied: viewModel.lastCopiedID == item.id,
@@ -53,38 +54,80 @@ struct HistoryView: View {
                                 DragPreview(item: item)
                             }
                             .contextMenu {
-                                Button(L.copy) { viewModel.selectAndCopy(item) }
-                                Button(item.isPinned ? L.unpinFromTop : L.pinToTop) {
+                                Button {
+                                    viewModel.selectAndCopy(item)
+                                } label: {
+                                    Label(L.copy, systemImage: "doc.on.doc")
+                                }
+                                if item.text != nil {
+                                    Button {
+                                        viewModel.copyPlain(item)
+                                    } label: {
+                                        Label(L.copyPlain, systemImage: "doc.plaintext")
+                                    }
+                                    Menu {
+                                        ForEach(NotchViewModel.TextTransform.allCases) { tf in
+                                            Button {
+                                                viewModel.copyTransformed(item, tf)
+                                            } label: {
+                                                Label(tf.title, systemImage: tf.icon)
+                                            }
+                                        }
+                                    } label: {
+                                        Label(L.transform, systemImage: "wand.and.stars")
+                                    }
+                                }
+                                Button {
                                     viewModel.clipboard.togglePin(item)
+                                } label: {
+                                    Label(
+                                        item.isPinned ? L.unpinFromTop : L.pinToTop,
+                                        systemImage: item.isPinned ? "pin.slash" : "pin"
+                                    )
                                 }
-                                Button(item.isFavorite ? L.unpin : L.pin) {
+                                Button {
                                     viewModel.clipboard.toggleFavorite(item)
+                                } label: {
+                                    Label(
+                                        item.isFavorite ? L.unpin : L.pin,
+                                        systemImage: item.isFavorite ? "star.slash" : "star"
+                                    )
                                 }
-                                Button(L.addTag) {
+                                Button {
                                     if let tag = TagPrompt.run() {
                                         viewModel.clipboard.addTag(tag, to: item)
                                     }
+                                } label: {
+                                    Label(L.addTag, systemImage: "tag")
                                 }
                                 if !item.tags.isEmpty {
-                                    Menu(L.removeTag) {
+                                    Menu {
                                         ForEach(item.tags, id: \.self) { tag in
                                             Button(tag) { viewModel.clipboard.removeTag(tag, from: item) }
                                         }
+                                    } label: {
+                                        Label(L.removeTag, systemImage: "tag.slash")
                                     }
                                 }
                                 if item.fileURL != nil {
-                                    Button(L.addToShelf) { viewModel.shelf.add(from: item) }
+                                    Button {
+                                        viewModel.shelf.add(from: item)
+                                    } label: {
+                                        Label(L.addToShelf, systemImage: "tray.and.arrow.down")
+                                    }
                                 }
                                 Divider()
-                                Button(L.delete, role: .destructive) {
+                                Button(role: .destructive) {
                                     viewModel.clipboard.remove(item)
+                                } label: {
+                                    Label(L.delete, systemImage: "trash")
                                 }
                             }
-                            .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, 6)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: filtered.map(\.id))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: filtered)
                 }
                 .scrollIndicators(.never)
                 .scrollEdgeFade()
@@ -121,12 +164,14 @@ private struct ClipboardCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             preview
-                .frame(height: 96)
+                .frame(height: 92)
                 .frame(maxWidth: .infinity)
                 .clipped()
+            Spacer(minLength: 0)
             if !item.tags.isEmpty { tagRow }
             footer
         }
+        .frame(height: 144)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -210,8 +255,9 @@ private struct ClipboardCard: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.top, 7)
         }
+        .frame(height: 22)
+        .padding(.top, 6)
     }
 
     private var pinBadge: some View {
@@ -465,24 +511,29 @@ struct EmptyState: View {
     @State private var floating = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            illustration
-            VStack(spacing: 7) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                Text(subtitle)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 280)
+        GeometryReader { geo in
+            let isCompact = geo.size.height < 240
+            VStack(spacing: isCompact ? 8 : 16) {
+                if geo.size.height > 140 {
+                    illustration(isCompact: isCompact)
+                }
+                VStack(spacing: isCompact ? 3 : 7) {
+                    Text(title)
+                        .font(.system(size: isCompact ? 14 : 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text(subtitle)
+                        .font(.system(size: isCompact ? 11 : 12.5))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: isCompact ? 240 : 280)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(isCompact ? 10 : 30)
+            .opacity(appeared ? 1 : 0)
+            .scaleEffect(appeared ? 1 : 0.92)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(30)
-        .opacity(appeared ? 1 : 0)
-        .scaleEffect(appeared ? 1 : 0.92)
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { appeared = true }
             withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
@@ -491,17 +542,19 @@ struct EmptyState: View {
         }
     }
 
-    private var illustration: some View {
-        ZStack {
-            // Soft layered halo behind the glyph.
+    private func illustration(isCompact: Bool) -> some View {
+        let size: CGFloat = isCompact ? 60 : 92
+        let haloSize: CGFloat = isCompact ? 90 : 150
+        let iconSize: CGFloat = isCompact ? 22 : 36
+        return ZStack {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.accentColor.opacity(0.28), .clear],
-                        center: .center, startRadius: 2, endRadius: 70
+                        colors: [Color.white.opacity(0.12), .clear],
+                        center: .center, startRadius: 2, endRadius: isCompact ? 40 : 70
                     )
                 )
-                .frame(width: 150, height: 150)
+                .frame(width: haloSize, height: haloSize)
                 .scaleEffect(floating ? 1.06 : 0.94)
 
             Circle()
@@ -513,19 +566,14 @@ struct EmptyState: View {
                     lineWidth: 1
                 )
                 .background(Circle().fill(Color.white.opacity(0.04)))
-                .frame(width: 92, height: 92)
+                .frame(width: size, height: size)
 
             Image(systemName: icon)
-                .font(.system(size: 36, weight: .medium))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.white.opacity(0.95), Color.accentColor.opacity(0.85)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
-                .symbolRenderingMode(.hierarchical)
+                .font(.system(size: iconSize, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .symbolRenderingMode(.monochrome)
         }
-        .offset(y: floating ? -5 : 5)
+        .offset(y: floating ? -3 : 3)
     }
 }
 

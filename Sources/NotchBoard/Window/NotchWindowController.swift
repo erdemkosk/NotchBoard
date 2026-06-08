@@ -43,13 +43,25 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         viewModel.requestClose = { [weak self] in self?.close() }
         viewModel.clipboard.start()
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidResignActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+
+        // Import files sent from Finder via the "Send to NotchBoard" extension.
+        ShelfInbox.startObserving { [weak self] in self?.importFromInbox() }
+        importFromInbox()
+
         hover.onMove = { [weak self] point in
             Task { @MainActor in self?.handleMouseMove(point) }
         }
         hover.start()
 
+        let settings = AppSettings.shared
         hotKey.onTrigger = { [weak self] in self?.toggle() }
-        hotKey.register()
+        hotKey.register(keyCode: UInt32(settings.hotkeyCode), modifiers: UInt32(settings.hotkeyModifiers))
 
         installKeyMonitor()
 
@@ -59,6 +71,45 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
             .dropFirst()
             .sink { [weak self] _, _ in self?.applyPanelSize() }
             .store(in: &cancellables)
+
+        // Live-update the trigger pill when its non-notch appearance changes.
+        settings.$triggerPillWidth
+            .combineLatest(settings.$triggerPillHeight, settings.$triggerPillCornerRadius)
+            .dropFirst()
+            .sink { [weak self] _, _, _ in self?.refreshPillAppearance() }
+            .store(in: &cancellables)
+
+        // Live-update the hotkey registration when it changes in settings.
+        settings.$hotkeyCode
+            .combineLatest(settings.$hotkeyModifiers)
+            .dropFirst()
+            .sink { [weak self] code, mods in
+                self?.hotKey.register(keyCode: UInt32(code), modifiers: UInt32(mods))
+            }
+            .store(in: &cancellables)
+
+        // Make the window interactive while the HUD is shown so the user can hover & click its actions
+        viewModel.$hudItem
+            .sink { [weak self] item in
+                guard let self else { return }
+                if item != nil {
+                    self.window?.ignoresMouseEvents = false
+                } else if !self.viewModel.isOpen {
+                    self.window?.ignoresMouseEvents = true
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Drains the Finder-extension inbox and stashes any queued files on the
+    /// shelf (current collection).
+    private func importFromInbox() {
+        let urls = ShelfInbox.drain()
+        guard !urls.isEmpty else { return }
+        for url in urls {
+            viewModel.shelf.addFile(at: url)
+        }
+        viewModel.selectedTab = .shelf
     }
 
     private func applyPanelSize() {
@@ -156,7 +207,14 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
     }
 
     func toggle() {
-        viewModel.isOpen ? close() : open()
+        if viewModel.isOpen {
+            close()
+        } else {
+            // Summoned via the keyboard shortcut: switch to History and focus the search field on open.
+            viewModel.selectedTab = .history
+            viewModel.pendingSearchFocus = true
+            open()
+        }
     }
 
     // MARK: - Geometry
@@ -168,12 +226,20 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
     }
 
-    /// Hot zone around the notch that triggers opening (screen coords).
+    /// Hot zone around the notch that triggers opening (screen coords). Uses the
+    /// effective pill size (which honors the user's non-notch customization).
     private func triggerRect() -> NSRect {
         let f = metrics.screen.frame
-        let width = max(metrics.notchWidth + 80, 200)
-        let height = max(metrics.notchHeight + 6, 30)
+        let width = max(viewModel.notchWidth + 80, 200)
+        let height = max(viewModel.notchHeight + 6, 30)
         return NSRect(x: f.midX - width / 2, y: f.maxY - height, width: width, height: height)
+    }
+
+    /// Re-applies the trigger-pill appearance after the user changes the
+    /// non-notch customization in Settings.
+    private func refreshPillAppearance() {
+        viewModel.updateMetrics(metrics)
+        triggerWindow?.setFrame(triggerRect(), display: true)
     }
 
     // MARK: - Open / Close
@@ -217,6 +283,7 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
             viewModel.isOpen = false
         }
+        viewModel.unlockedCollectionIDs.removeAll()
         // Re-enable click-through + the trigger after the collapse settles, and
         // hand focus back so the user keeps typing where they were.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { [weak self] in
@@ -225,7 +292,25 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
             self.triggerWindow?.ignoresMouseEvents = false
             // Hand focus back to the app the user was in so they can paste (Cmd+V).
             NSApp.deactivate()
+
+            if AppSettings.shared.autoPasteEnabled {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.performAutoPaste()
+                }
+            }
         }
+    }
+
+    private func performAutoPaste() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let vKeyCode: CGKeyCode = 9 // V key
+        guard let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true) else { return }
+        cmdVDown.flags = .maskCommand
+        guard let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false) else { return }
+        cmdVUp.flags = .maskCommand
+
+        cmdVDown.post(tap: .cghidEventTap)
+        cmdVUp.post(tap: .cghidEventTap)
     }
 
     private func scheduleClose() {
@@ -247,5 +332,9 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
     private func cancelClose() {
         closeWorkItem?.cancel()
         closeWorkItem = nil
+    }
+
+    @objc private func appDidResignActive() {
+        close()
     }
 }

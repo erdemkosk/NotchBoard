@@ -2,9 +2,15 @@ import AppKit
 import Combine
 
 /// Holds files/images dropped onto the notch so they can be re-dragged elsewhere.
+/// Items are grouped into named, colored collections (shelf tabs).
 @MainActor
 final class ShelfManager: ObservableObject {
     @Published private(set) var items: [ShelfItem] = []
+    @Published private(set) var collections: [ShelfCollection] = []
+    @Published var selectedCollectionID: UUID = UUID()
+
+    /// Multi-selection of shelf tiles for batch operations.
+    @Published var selection: Set<UUID> = []
 
     private var shelfDirectory: URL {
         let dir = Persistence.supportDirectory.appendingPathComponent("shelf", isDirectory: true)
@@ -14,11 +20,99 @@ final class ShelfManager: ObservableObject {
 
     init() {
         loadFromDisk()
+        ensureAtLeastOneCollection()
     }
 
-    /// Copies a source file into the shelf cache and registers it.
+    // MARK: - Collections
+
+    /// The currently selected collection (falls back to the first).
+    var selectedCollection: ShelfCollection? {
+        collections.first { $0.id == selectedCollectionID } ?? collections.first
+    }
+
+    /// Items belonging to the given collection, newest first (preserving order).
+    func items(in collectionID: UUID) -> [ShelfItem] {
+        items.filter { $0.collectionID == collectionID }
+    }
+
+    /// Items in the currently selected collection.
+    var visibleItems: [ShelfItem] {
+        items(in: selectedCollectionID)
+    }
+
+    func count(in collectionID: UUID) -> Int {
+        items.reduce(0) { $0 + ($1.collectionID == collectionID ? 1 : 0) }
+    }
+
     @discardableResult
-    func addFile(at sourceURL: URL) -> ShelfItem? {
+    func addCollection(name: String) -> ShelfCollection {
+        let colorHex = ShelfCollection.palette[collections.count % ShelfCollection.palette.count]
+        let collection = ShelfCollection(name: name, colorHex: colorHex)
+        collections.append(collection)
+        selectedCollectionID = collection.id
+        persist()
+        return collection
+    }
+
+    func renameCollection(_ id: UUID, to name: String) {
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let idx = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[idx].name = clean
+        persist()
+    }
+
+    func recolorCollection(_ id: UUID, to colorHex: String) {
+        guard let idx = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[idx].colorHex = colorHex
+        persist()
+    }
+
+    func toggleLockCollection(_ id: UUID) {
+        guard let idx = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[idx].isLocked.toggle()
+        persist()
+    }
+
+    /// Removes a collection and all of its files. The last collection can't be
+    /// removed (there must always be at least one).
+    func removeCollection(_ id: UUID) {
+        guard collections.count > 1 else { return }
+        for item in items(in: id) {
+            try? FileManager.default.removeItem(at: item.fileURL)
+        }
+        items.removeAll { $0.collectionID == id }
+        collections.removeAll { $0.id == id }
+        if selectedCollectionID == id {
+            selectedCollectionID = collections.first?.id ?? selectedCollectionID
+        }
+        persist()
+    }
+
+    /// Moves the given items into another collection.
+    func move(_ ids: Set<UUID>, to collectionID: UUID) {
+        guard collections.contains(where: { $0.id == collectionID }) else { return }
+        for idx in items.indices where ids.contains(items[idx].id) {
+            items[idx].collectionID = collectionID
+        }
+        persist()
+    }
+
+    private func ensureAtLeastOneCollection() {
+        if collections.isEmpty {
+            let def = ShelfCollection.makeDefault(name: L.shelfDefaultName)
+            collections = [def]
+        }
+        if !collections.contains(where: { $0.id == selectedCollectionID }) {
+            selectedCollectionID = collections[0].id
+        }
+    }
+
+    // MARK: - Items
+
+    /// Copies a source file into the shelf cache and registers it in the given
+    /// collection (defaults to the selected one).
+    @discardableResult
+    func addFile(at sourceURL: URL, to collectionID: UUID? = nil) -> ShelfItem? {
         // Ignore drops of files that already live in the shelf (dragging an
         // item out and back in) so we don't create duplicates.
         if isInShelf(sourceURL) { return nil }
@@ -29,7 +123,11 @@ final class ShelfManager: ObservableObject {
         } catch {
             return nil
         }
-        let item = ShelfItem(fileURL: dest, displayName: safeName)
+        let item = ShelfItem(
+            fileURL: dest,
+            displayName: safeName,
+            collectionID: collectionID ?? selectedCollectionID
+        )
         items.insert(item, at: 0)
         persist()
         return item
@@ -37,14 +135,18 @@ final class ShelfManager: ObservableObject {
 
     /// Writes raw image data (e.g. a dropped bitmap with no file URL) to the shelf.
     @discardableResult
-    func addImageData(_ data: Data, suggestedName: String = "image.png") -> ShelfItem? {
+    func addImageData(_ data: Data, suggestedName: String = "image.png", to collectionID: UUID? = nil) -> ShelfItem? {
         let dest = uniqueDestination(for: suggestedName)
         do {
             try data.write(to: dest)
         } catch {
             return nil
         }
-        let item = ShelfItem(fileURL: dest, displayName: suggestedName)
+        let item = ShelfItem(
+            fileURL: dest,
+            displayName: suggestedName,
+            collectionID: collectionID ?? selectedCollectionID
+        )
         items.insert(item, at: 0)
         persist()
         return item
@@ -59,8 +161,25 @@ final class ShelfManager: ObservableObject {
 
     func remove(_ item: ShelfItem) {
         items.removeAll { $0.id == item.id }
+        selection.remove(item.id)
         try? FileManager.default.removeItem(at: item.fileURL)
         persist()
+    }
+
+    /// Removes the given item IDs (used by batch operations).
+    func remove(ids: Set<UUID>) {
+        for item in items where ids.contains(item.id) {
+            try? FileManager.default.removeItem(at: item.fileURL)
+        }
+        items.removeAll { ids.contains($0.id) }
+        selection.subtract(ids)
+        persist()
+    }
+
+    /// Removes every item in the currently selected collection.
+    func clearSelectedCollection() {
+        let ids = Set(visibleItems.map { $0.id })
+        remove(ids: ids)
     }
 
     func clearAll() {
@@ -68,8 +187,26 @@ final class ShelfManager: ObservableObject {
             try? FileManager.default.removeItem(at: item.fileURL)
         }
         items.removeAll()
+        selection.removeAll()
         persist()
     }
+
+    // MARK: - Selection helpers
+
+    func toggleSelection(_ id: UUID) {
+        if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+    }
+
+    func clearSelection() {
+        selection.removeAll()
+    }
+
+    /// Resolved file URLs for the current selection, in display order.
+    var selectedURLs: [URL] {
+        visibleItems.filter { selection.contains($0.id) }.map { $0.fileURL }
+    }
+
+    // MARK: - Dedup helpers
 
     /// Whether the URL already points inside the shelf storage directory.
     private func isInShelf(_ url: URL) -> Bool {
@@ -129,6 +266,14 @@ final class ShelfManager: ObservableObject {
         let fileName: String
         let displayName: String
         let addedAt: Date
+        // Optional so the legacy flat array (pre-collections) still decodes.
+        var collectionID: UUID?
+    }
+
+    /// New on-disk envelope: collections plus their items.
+    private struct StoredShelf: Codable {
+        var collections: [ShelfCollection]
+        var items: [StoredItem]
     }
 
     private func persist() {
@@ -137,20 +282,40 @@ final class ShelfManager: ObservableObject {
                 id: $0.id,
                 fileName: $0.fileURL.lastPathComponent,
                 displayName: $0.displayName,
-                addedAt: $0.addedAt
+                addedAt: $0.addedAt,
+                collectionID: $0.collectionID
             )
         }
-        Persistence.save(stored, to: Persistence.shelfIndexURL)
+        let envelope = StoredShelf(collections: collections, items: stored)
+        Persistence.save(envelope, to: Persistence.shelfIndexURL)
     }
 
     private func loadFromDisk() {
-        guard let stored = Persistence.load([StoredItem].self, from: Persistence.shelfIndexURL) else {
+        // New format first.
+        if let envelope = Persistence.load(StoredShelf.self, from: Persistence.shelfIndexURL) {
+            collections = envelope.collections
+            let fallbackID = envelope.collections.first?.id
+            items = envelope.items.compactMap { s in
+                let url = shelfDirectory.appendingPathComponent(s.fileName)
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                guard let cid = s.collectionID ?? fallbackID else { return nil }
+                return ShelfItem(id: s.id, fileURL: url, displayName: s.displayName, addedAt: s.addedAt, collectionID: cid)
+            }
             return
         }
-        items = stored.compactMap { s in
+
+        // Legacy migration: a flat [StoredItem] array with no collections.
+        guard let legacy = Persistence.load([StoredItem].self, from: Persistence.shelfIndexURL) else {
+            return
+        }
+        let def = ShelfCollection.makeDefault(name: L.shelfDefaultName)
+        collections = [def]
+        selectedCollectionID = def.id
+        items = legacy.compactMap { s in
             let url = shelfDirectory.appendingPathComponent(s.fileName)
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-            return ShelfItem(id: s.id, fileURL: url, displayName: s.displayName, addedAt: s.addedAt)
+            return ShelfItem(id: s.id, fileURL: url, displayName: s.displayName, addedAt: s.addedAt, collectionID: def.id)
         }
+        persist()
     }
 }

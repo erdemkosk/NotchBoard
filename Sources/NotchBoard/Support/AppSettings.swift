@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import ServiceManagement
+import Carbon.HIToolbox
 
 /// User-configurable settings, persisted in UserDefaults.
 @MainActor
@@ -34,8 +35,23 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
 
+    /// Whether clicked items automatically paste into the frontmost app.
+    @Published var autoPasteEnabled: Bool {
+        didSet { defaults.set(autoPasteEnabled, forKey: Keys.autoPasteEnabled) }
+    }
+
+    /// Configured system-wide hotkey code.
+    @Published var hotkeyCode: Int {
+        didSet { defaults.set(hotkeyCode, forKey: Keys.hotkeyCode) }
+    }
+
+    /// Configured system-wide hotkey modifiers.
+    @Published var hotkeyModifiers: Int {
+        didSet { defaults.set(hotkeyModifiers, forKey: Keys.hotkeyModifiers) }
+    }
+
     /// Retention options offered in Settings (minutes). 0 = off.
-    static let retentionOptions: [Int] = [0, 60, 60 * 24, 60 * 24 * 7, 60 * 24 * 30]
+    static let retentionOptions: [Int] = [0, 5, 15, 30, 60, 60 * 24, 60 * 24 * 7, 60 * 24 * 30]
 
     @Published var panelWidth: Double {
         didSet { defaults.set(panelWidth, forKey: Keys.panelWidth) }
@@ -43,6 +59,20 @@ final class AppSettings: ObservableObject {
 
     @Published var panelHeight: Double {
         didSet { defaults.set(panelHeight, forKey: Keys.panelHeight) }
+    }
+
+    /// Trigger-pill appearance on screens WITHOUT a hardware notch. Macs with a
+    /// real notch always use the hardware geometry and ignore these.
+    @Published var triggerPillWidth: Double {
+        didSet { defaults.set(triggerPillWidth, forKey: Keys.triggerPillWidth) }
+    }
+
+    @Published var triggerPillHeight: Double {
+        didSet { defaults.set(triggerPillHeight, forKey: Keys.triggerPillHeight) }
+    }
+
+    @Published var triggerPillCornerRadius: Double {
+        didSet { defaults.set(triggerPillCornerRadius, forKey: Keys.triggerPillCornerRadius) }
     }
 
     // Allowed panel size range.
@@ -53,6 +83,17 @@ final class AppSettings: ObservableObject {
     static let defaultPanelWidth: Double = 760
     static let defaultPanelHeight: Double = 540
 
+    // Trigger-pill (non-notch) range + defaults.
+    static let minPillWidth: Double = 120
+    static let maxPillWidth: Double = 600
+    static let defaultPillWidth: Double = 220
+    static let minPillHeight: Double = 20
+    static let maxPillHeight: Double = 60
+    static let defaultPillHeight: Double = 28
+    static let minPillCorner: Double = 0
+    static let maxPillCorner: Double = 22
+    static let defaultPillCorner: Double = 12
+
     private enum Keys {
         static let launchAtLogin = "launchAtLogin"
         static let skipSensitive = "skipSensitive"
@@ -61,6 +102,12 @@ final class AppSettings: ObservableObject {
         static let panelHeight = "panelHeight"
         static let autoDeleteMinutes = "autoDeleteMinutes"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let triggerPillWidth = "triggerPillWidth"
+        static let triggerPillHeight = "triggerPillHeight"
+        static let triggerPillCornerRadius = "triggerPillCornerRadius"
+        static let autoPasteEnabled = "autoPasteEnabled"
+        static let hotkeyCode = "hotkeyCode"
+        static let hotkeyModifiers = "hotkeyModifiers"
     }
 
     private init() {
@@ -68,7 +115,13 @@ final class AppSettings: ObservableObject {
             Keys.skipSensitive: true,
             Keys.maxItems: 100,
             Keys.panelWidth: Self.defaultPanelWidth,
-            Keys.panelHeight: Self.defaultPanelHeight
+            Keys.panelHeight: Self.defaultPanelHeight,
+            Keys.triggerPillWidth: Self.defaultPillWidth,
+            Keys.triggerPillHeight: Self.defaultPillHeight,
+            Keys.triggerPillCornerRadius: Self.defaultPillCorner,
+            Keys.autoPasteEnabled: false,
+            Keys.hotkeyCode: kVK_ANSI_V,
+            Keys.hotkeyModifiers: cmdKey | shiftKey
         ])
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
         skipSensitive = defaults.bool(forKey: Keys.skipSensitive)
@@ -77,6 +130,12 @@ final class AppSettings: ObservableObject {
         panelHeight = defaults.double(forKey: Keys.panelHeight)
         autoDeleteMinutes = defaults.integer(forKey: Keys.autoDeleteMinutes)
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
+        triggerPillWidth = defaults.double(forKey: Keys.triggerPillWidth)
+        triggerPillHeight = defaults.double(forKey: Keys.triggerPillHeight)
+        triggerPillCornerRadius = defaults.double(forKey: Keys.triggerPillCornerRadius)
+        autoPasteEnabled = defaults.bool(forKey: Keys.autoPasteEnabled)
+        hotkeyCode = defaults.integer(forKey: Keys.hotkeyCode)
+        hotkeyModifiers = defaults.integer(forKey: Keys.hotkeyModifiers)
     }
 
     /// Reflects the actual registration state on launch.

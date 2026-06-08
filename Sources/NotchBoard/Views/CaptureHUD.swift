@@ -7,11 +7,15 @@ struct CaptureHUD: View {
     let item: ClipboardItem
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+    var onUndo: (() -> Void)? = nil
+    var onSendToShelf: (() -> Void)? = nil
+    var onHoverChanged: ((Bool) -> Void)? = nil
 
     @State private var fullSize: CGSize = .zero
     @State private var grown = false
     @State private var contentIn = false
     @State private var checkPop = false
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -27,6 +31,38 @@ struct CaptureHUD: View {
                 .font(.system(size: 13))
                 .foregroundStyle(kindTint)
                 .scaleEffect(checkPop ? 1 : 0.3)
+
+            if isHovered {
+                Divider()
+                    .frame(height: 14)
+                    .background(Color.white.opacity(0.2))
+                    .padding(.horizontal, 2)
+
+                HStack(spacing: 12) {
+                    if item.kind == .file || item.kind == .image {
+                        Button {
+                            onSendToShelf?()
+                        } label: {
+                            Image(systemName: "tray.and.arrow.down")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .help(L.addToShelf)
+                    }
+
+                    Button {
+                        onUndo?()
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                    .help(L.t("Undo", "Geri Al"))
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
         }
         .opacity(contentIn ? 1 : 0)
         .padding(.horizontal, 11)
@@ -34,7 +70,7 @@ struct CaptureHUD: View {
         // notch so its boundary is hidden and it reads as the notch growing.
         .padding(.top, notchHeight + 20)
         .padding(.bottom, 7)
-        .frame(minWidth: max(notchWidth + 36, 150))
+        .frame(minWidth: max(notchWidth + (isHovered ? 120 : 36), 150))
         .background(Color.black)
         .clipShape(
             .rect(
@@ -48,7 +84,11 @@ struct CaptureHUD: View {
         // Measure the natural size, then grow from the notch footprint up to it.
         .background(
             GeometryReader { geo in
-                Color.clear.onAppear { startReveal(for: geo.size) }
+                Color.clear
+                    .onChange(of: isHovered) { _, _ in
+                        fullSize = geo.size
+                    }
+                    .onAppear { startReveal(for: geo.size) }
             }
         )
         .scaleEffect(
@@ -58,6 +98,12 @@ struct CaptureHUD: View {
         )
         .opacity(fullSize == .zero ? 0 : 1)
         .offset(y: -16)
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
+                isHovered = hovering
+            }
+            onHoverChanged?(hovering)
+        }
     }
 
     private func startReveal(for size: CGSize) {

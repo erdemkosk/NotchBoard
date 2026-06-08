@@ -17,6 +17,7 @@ struct ThumbnailImage: View {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let fallbackIcon {
                 Image(nsImage: fallbackIcon)
                     .resizable()

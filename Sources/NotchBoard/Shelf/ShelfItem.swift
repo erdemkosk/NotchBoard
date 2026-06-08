@@ -7,12 +7,21 @@ struct ShelfItem: Identifiable, Equatable {
     let fileURL: URL
     let displayName: String
     let addedAt: Date
+    /// The collection (shelf tab) this item belongs to.
+    var collectionID: UUID
 
-    init(id: UUID = UUID(), fileURL: URL, displayName: String? = nil, addedAt: Date = Date()) {
+    init(
+        id: UUID = UUID(),
+        fileURL: URL,
+        displayName: String? = nil,
+        addedAt: Date = Date(),
+        collectionID: UUID
+    ) {
         self.id = id
         self.fileURL = fileURL
         self.displayName = displayName ?? fileURL.lastPathComponent
         self.addedAt = addedAt
+        self.collectionID = collectionID
     }
 
     static func == (lhs: ShelfItem, rhs: ShelfItem) -> Bool { lhs.id == rhs.id }

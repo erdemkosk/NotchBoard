@@ -1,9 +1,24 @@
 import SwiftUI
 import AppKit
+import Carbon.HIToolbox
 
 struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     @ObservedObject var updater = UpdateService.shared
+
+    private static let keyOptions: [(name: String, code: Int)] = [
+        ("A", kVK_ANSI_A), ("B", kVK_ANSI_B), ("C", kVK_ANSI_C), ("D", kVK_ANSI_D),
+        ("E", kVK_ANSI_E), ("F", kVK_ANSI_F), ("G", kVK_ANSI_G), ("H", kVK_ANSI_H),
+        ("I", kVK_ANSI_I), ("J", kVK_ANSI_J), ("K", kVK_ANSI_K), ("L", kVK_ANSI_L),
+        ("M", kVK_ANSI_M), ("N", kVK_ANSI_N), ("O", kVK_ANSI_O), ("P", kVK_ANSI_P),
+        ("Q", kVK_ANSI_Q), ("R", kVK_ANSI_R), ("S", kVK_ANSI_S), ("T", kVK_ANSI_T),
+        ("U", kVK_ANSI_U), ("V", kVK_ANSI_V), ("W", kVK_ANSI_W), ("X", kVK_ANSI_X),
+        ("Y", kVK_ANSI_Y), ("Z", kVK_ANSI_Z),
+        ("0", kVK_ANSI_0), ("1", kVK_ANSI_1), ("2", kVK_ANSI_2), ("3", kVK_ANSI_3),
+        ("4", kVK_ANSI_4), ("5", kVK_ANSI_5), ("6", kVK_ANSI_6), ("7", kVK_ANSI_7),
+        ("8", kVK_ANSI_8), ("9", kVK_ANSI_9),
+        ("Space", kVK_Space), ("Return", kVK_Return), ("Tab", kVK_Tab), ("Esc", kVK_Escape)
+    ]
 
     var body: some View {
         Form {
@@ -14,6 +29,12 @@ struct SettingsView: View {
             Section {
                 Toggle(L.launchAtLogin, isOn: $settings.launchAtLogin)
                 Toggle(L.skipSensitive, isOn: $settings.skipSensitive)
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(L.autoPaste, isOn: $settings.autoPasteEnabled)
+                    Text(L.autoPasteHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -38,12 +59,88 @@ struct SettingsView: View {
             }
 
             Section {
-                HStack {
-                    Image(systemName: "keyboard")
-                    Text(L.hotkeyHint)
-                    Spacer()
+                pillPreview
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(L.pillWidth)
+                        Spacer()
+                        Text("\(Int(settings.triggerPillWidth)) pt").foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: $settings.triggerPillWidth,
+                        in: AppSettings.minPillWidth...AppSettings.maxPillWidth,
+                        step: 5
+                    )
                 }
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(L.pillHeight)
+                        Spacer()
+                        Text("\(Int(settings.triggerPillHeight)) pt").foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: $settings.triggerPillHeight,
+                        in: AppSettings.minPillHeight...AppSettings.maxPillHeight,
+                        step: 1
+                    )
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(L.pillCorner)
+                        Spacer()
+                        Text("\(Int(settings.triggerPillCornerRadius)) pt").foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: $settings.triggerPillCornerRadius,
+                        in: AppSettings.minPillCorner...AppSettings.maxPillCorner,
+                        step: 1
+                    )
+                }
+                Text(L.pillHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text(L.triggerPillSection)
+            }
+
+            Section(L.keyboardShortcut) {
+                HStack(spacing: 12) {
+                    Toggle("⌘ Cmd", isOn: Binding(
+                        get: { (settings.hotkeyModifiers & cmdKey) != 0 },
+                        set: { value in
+                            if value { settings.hotkeyModifiers |= cmdKey }
+                            else { settings.hotkeyModifiers &= ~cmdKey }
+                        }
+                    ))
+                    Toggle("⇧ Shift", isOn: Binding(
+                        get: { (settings.hotkeyModifiers & shiftKey) != 0 },
+                        set: { value in
+                            if value { settings.hotkeyModifiers |= shiftKey }
+                            else { settings.hotkeyModifiers &= ~shiftKey }
+                        }
+                    ))
+                    Toggle("⌥ Opt", isOn: Binding(
+                        get: { (settings.hotkeyModifiers & optionKey) != 0 },
+                        set: { value in
+                            if value { settings.hotkeyModifiers |= optionKey }
+                            else { settings.hotkeyModifiers &= ~optionKey }
+                        }
+                    ))
+                    Toggle("⌃ Ctrl", isOn: Binding(
+                        get: { (settings.hotkeyModifiers & controlKey) != 0 },
+                        set: { value in
+                            if value { settings.hotkeyModifiers |= controlKey }
+                            else { settings.hotkeyModifiers &= ~controlKey }
+                        }
+                    ))
+                }
+                .toggleStyle(.checkbox)
+
+                Picker(L.t("Key", "Tuş"), selection: $settings.hotkeyCode) {
+                    ForEach(Self.keyOptions, id: \.code) { option in
+                        Text(option.name).tag(option.code)
+                    }
+                }
             }
 
             Section(L.about) {
@@ -51,7 +148,29 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 520)
+        .frame(width: 400, height: 660)
+    }
+
+    private var pillPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.black.opacity(0.85))
+                .frame(height: 64)
+            UnevenRoundedRectangle(
+                bottomLeadingRadius: settings.triggerPillCornerRadius,
+                bottomTrailingRadius: settings.triggerPillCornerRadius
+            )
+            .fill(Color.white)
+            .frame(
+                width: min(settings.triggerPillWidth, 360),
+                height: settings.triggerPillHeight
+            )
+            .frame(maxHeight: 64, alignment: .top)
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.easeOut(duration: 0.15), value: settings.triggerPillWidth)
+        .animation(.easeOut(duration: 0.15), value: settings.triggerPillHeight)
+        .animation(.easeOut(duration: 0.15), value: settings.triggerPillCornerRadius)
     }
 
     private var aboutRow: some View {
