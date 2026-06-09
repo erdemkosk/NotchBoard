@@ -44,17 +44,16 @@ enum DragProviders {
     /// Canonical file drag-out: `NSItemProvider(contentsOf:)` registers the file
     /// representation so Finder and other apps receive a real, droppable file.
     private static func fileProvider(url: URL, name: String) -> NSItemProvider {
-        // Strip the path extension from suggestedName because NSItemProvider
-        // automatically appends the registered format extension during drag-out.
-        let baseName = (name as NSString).deletingPathExtension
         if let provider = NSItemProvider(contentsOf: url) {
-            provider.suggestedName = baseName
+            // Do not explicitly override suggestedName. NSItemProvider automatically
+            // derives suggestedName from the file URL's last path component, which
+            // preserves the original filename and extension exactly (e.g., keeping
+            // .jpg instead of converting to .jpeg) and avoids double extensions.
             return provider
         }
         // Fallback: hand over the file URL itself.
         let provider = NSItemProvider()
         provider.registerObject(url as NSURL, visibility: .all)
-        provider.suggestedName = baseName
         return provider
     }
 }
