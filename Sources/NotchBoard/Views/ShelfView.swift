@@ -198,13 +198,19 @@ struct ShelfView: View {
                 EmptyState(
                     icon: "tray.and.arrow.down",
                     title: L.emptyShelfTitle,
-                    subtitle: L.emptyShelfSubtitle
+                    subtitle: L.emptyShelfSubtitle,
+                    actionTitle: L.browseFiles,
+                    action: browseFiles
                 )
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                         ForEach(shelf.visibleItems) { item in
-                            ShelfCard(item: item, isSelected: shelf.selection.contains(item.id))
+                            ShelfCard(
+                                item: item,
+                                isSelected: shelf.selection.contains(item.id),
+                                onDownload: { exportItem(item) }
+                            )
                                 .hoverFeedback()
                                 .onTapGesture {
                                     if let index = shelf.visibleItems.firstIndex(of: item) {
@@ -231,6 +237,11 @@ struct ShelfView: View {
                                         NSWorkspace.shared.activateFileViewerSelecting([item.fileURL])
                                     } label: {
                                         Label(L.revealInFinder, systemImage: "folder")
+                                    }
+                                    Button {
+                                        exportItem(item)
+                                    } label: {
+                                        Label(L.saveTo, systemImage: "arrow.down.circle")
                                     }
                                     if shelf.collections.count > 1 {
                                         Menu {
@@ -303,6 +314,18 @@ struct ShelfView: View {
     }
 
     // MARK: - Actions
+
+    private func browseFiles() {
+        let urls = FilePickerHelper.pickFiles()
+        guard !urls.isEmpty else { return }
+        for url in urls {
+            shelf.addFile(at: url)
+        }
+    }
+
+    private func exportItem(_ item: ShelfItem) {
+        _ = FilePickerHelper.saveCopy(of: item.fileURL, suggestedName: item.displayName)
+    }
 
     private func zipSelected() {
         let urls = shelf.selectedURLs
@@ -440,6 +463,7 @@ struct ShelfView: View {
 private struct ShelfCard: View {
     let item: ShelfItem
     var isSelected: Bool = false
+    var onDownload: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -466,6 +490,13 @@ private struct ShelfCard: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 0)
+                Button(action: onDownload) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                .buttonStyle(.plain)
+                .help(L.download)
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 8)

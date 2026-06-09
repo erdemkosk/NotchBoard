@@ -8,8 +8,7 @@ final class OnboardingWindowController {
 
     func show() {
         if let window {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
+            ModalWindowHelper.bringToFront(window)
             return
         }
 
@@ -27,8 +26,7 @@ final class OnboardingWindowController {
         win.center()
         window = win
 
-        NSApp.activate(ignoringOtherApps: true)
-        win.makeKeyAndOrderFront(nil)
+        ModalWindowHelper.bringToFront(win)
     }
 
     private func close() {

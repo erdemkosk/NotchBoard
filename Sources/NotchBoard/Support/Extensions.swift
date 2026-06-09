@@ -73,6 +73,163 @@ extension Color {
     }
 }
 
+/// Finder open/save panels floated above the notch panel.
+@MainActor
+enum FilePickerHelper {
+    private static var isPresenting = false
+
+    private static let openPanel: NSOpenPanel = {
+        let panel = NSOpenPanel()
+        panel.title = L.browseFilesTitle
+        panel.message = L.browseFilesMessage
+        panel.prompt = L.choose
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        panel.setFrameAutosaveName("")
+        return panel
+    }()
+
+    private static let savePanel: NSSavePanel = {
+        let panel = NSSavePanel()
+        panel.title = L.saveToTitle
+        panel.canCreateDirectories = true
+        panel.setFrameAutosaveName("")
+        return panel
+    }()
+
+    /// Preloads panel resources so the first click feels instant.
+    static func warmUp() {
+        _ = openPanel
+        _ = savePanel
+    }
+
+    static func pickFiles() -> [URL] {
+        guard !isPresenting else { return [] }
+        isPresenting = true
+        defer { isPresenting = false }
+
+        return whileNotchDeferred {
+            prepare(openPanel)
+            guard runCenteredModal(openPanel) == .OK else { return [] }
+            return openPanel.urls
+        }
+    }
+
+    @discardableResult
+    static func saveCopy(of sourceURL: URL, suggestedName: String) -> Bool {
+        guard !isPresenting else { return false }
+        isPresenting = true
+        defer { isPresenting = false }
+
+        savePanel.nameFieldStringValue = suggestedName
+        return whileNotchDeferred {
+            prepare(savePanel)
+            guard runCenteredModal(savePanel) == .OK, let dest = savePanel.url else { return false }
+            do {
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try FileManager.default.removeItem(at: dest)
+                }
+                try FileManager.default.copyItem(at: sourceURL, to: dest)
+                return true
+            } catch {
+                return false
+            }
+        }
+    }
+
+    /// Drops notch windows below system panels for the duration of a modal picker.
+    private static func whileNotchDeferred<T>(_ work: () -> T) -> T {
+        let notchWindows = NSApp.windows.filter { $0.level == .statusBar }
+        let savedLevels = notchWindows.map { ($0, $0.level) }
+        notchWindows.forEach { $0.level = .normal }
+        defer {
+            for (window, level) in savedLevels {
+                window.level = level
+                window.orderFrontRegardless()
+            }
+        }
+        return work()
+    }
+
+    private static func prepare(_ panel: NSPanel) {
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+    }
+
+    /// Blocking modal panel centred on the active display.
+    private static func runCenteredModal(_ panel: NSOpenPanel) -> NSApplication.ModalResponse {
+        presentCentered(panel)
+        return panel.runModal()
+    }
+
+    private static func runCenteredModal(_ panel: NSSavePanel) -> NSApplication.ModalResponse {
+        presentCentered(panel)
+        return panel.runModal()
+    }
+
+    private static func presentCentered(_ panel: NSPanel) {
+        let sf = NotchScreenMetrics.active.screen.visibleFrame
+        if !NSApp.isActive {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        center(panel, in: sf)
+        panel.orderFrontRegardless()
+        panel.makeKey()
+    }
+
+    private static func center(_ panel: NSPanel, in frame: NSRect) {
+        var size = panel.frame.size
+        if size.width < 200 { size.width = min(800, frame.width * 0.72) }
+        if size.height < 200 { size.height = min(500, frame.height * 0.62) }
+        panel.setFrame(
+            NSRect(
+                x: frame.midX - size.width / 2,
+                y: frame.midY - size.height / 2,
+                width: size.width,
+                height: size.height
+            ),
+            display: false
+        )
+    }
+}
+
+/// Keeps auxiliary windows and alerts above the notch panel (`.statusBar`).
+@MainActor
+enum ModalWindowHelper {
+    static let aboveNotchLevel = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+
+    static func prepareAlert(_ alert: NSAlert, centerOffsetY: CGFloat = -80) {
+        let win = alert.window
+        win.level = .popUpMenu
+        win.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        positionCentered(win, offsetY: centerOffsetY)
+        NSApp.activate(ignoringOtherApps: true)
+        win.orderFrontRegardless()
+        win.makeKey()
+    }
+
+    static func bringToFront(_ window: NSWindow) {
+        window.level = aboveNotchLevel
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    private static func positionCentered(_ window: NSWindow, offsetY: CGFloat) {
+        let screen = NotchScreenMetrics.active.screen
+        let sf = screen.frame
+        let size = window.frame.size
+        window.setFrameOrigin(NSPoint(
+            x: sf.midX - size.width / 2,
+            y: sf.midY - size.height / 2 + offsetY
+        ))
+    }
+}
+
 /// Modal prompt for entering/creating a tag.
 @MainActor
 enum TagPrompt {
@@ -88,19 +245,7 @@ enum TagPrompt {
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
 
-        // The notch panel sits at `.statusBar` level, so a default alert would be
-        // hidden behind it. Float above the panel and drop the dialog lower-center
-        // on the active screen so it's clearly visible.
-        let win = alert.window
-        win.level = .popUpMenu
-        DispatchQueue.main.async {
-            let screen = NotchScreenMetrics.active.screen
-            let sf = screen.frame
-            let size = win.frame.size
-            let x = sf.midX - size.width / 2
-            let y = sf.midY - size.height / 2 - 80
-            win.setFrameOrigin(NSPoint(x: x, y: y))
-        }
+        ModalWindowHelper.prepareAlert(alert)
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else { return nil }
@@ -131,15 +276,8 @@ enum TextPrompt {
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
 
-        let win = alert.window
-        win.level = .popUpMenu
-        DispatchQueue.main.async {
-            let screen = NotchScreenMetrics.active.screen
-            let sf = screen.frame
-            let size = win.frame.size
-            win.setFrameOrigin(NSPoint(x: sf.midX - size.width / 2, y: sf.midY - size.height / 2 - 80))
-            field.selectText(nil)
-        }
+        ModalWindowHelper.prepareAlert(alert)
+        field.selectText(nil)
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else { return nil }
@@ -169,14 +307,7 @@ enum SnippetPrompt {
         alert.accessoryView = scroll
         alert.window.initialFirstResponder = textView
 
-        let win = alert.window
-        win.level = .popUpMenu
-        DispatchQueue.main.async {
-            let screen = NotchScreenMetrics.active.screen
-            let sf = screen.frame
-            let size = win.frame.size
-            win.setFrameOrigin(NSPoint(x: sf.midX - size.width / 2, y: sf.midY - size.height / 2 - 60))
-        }
+        ModalWindowHelper.prepareAlert(alert, centerOffsetY: -60)
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn else { return nil }

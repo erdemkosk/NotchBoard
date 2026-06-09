@@ -281,6 +281,13 @@ final class ClipboardManager: ObservableObject {
         persist()
     }
 
+    func setDisplayName(_ name: String?, for item: ClipboardItem) {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        items[idx].displayName = trimmed?.isEmpty == false ? trimmed : nil
+        persist()
+    }
+
     /// Creates a pinned text snippet (signature, address, code, …) that stays put
     /// and never gets trimmed or auto-deleted.
     @discardableResult
@@ -456,6 +463,7 @@ final class ClipboardManager: ObservableObject {
         var isFavorite: Bool = false
         var isPinned: Bool = false
         var tags: [String] = []
+        var displayName: String?
     }
 
     private func persist() {
@@ -468,7 +476,8 @@ final class ClipboardManager: ObservableObject {
                 fileName: item.fileURL?.lastPathComponent,
                 isFavorite: item.isFavorite,
                 isPinned: item.isPinned,
-                tags: item.tags
+                tags: item.tags,
+                displayName: item.displayName
             )
         }
         Persistence.save(stored, to: Persistence.historyIndexURL)
@@ -501,7 +510,8 @@ final class ClipboardManager: ObservableObject {
                 fileURL: fileURL,
                 isFavorite: s.isFavorite,
                 isPinned: s.isPinned,
-                tags: s.tags
+                tags: s.tags,
+                displayName: s.displayName
             )
         }
     }

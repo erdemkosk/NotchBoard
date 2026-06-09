@@ -16,6 +16,17 @@ struct ShelfCollectionBar: View {
                     collectionChip(collection)
                 }
                 Button {
+                    browseFiles()
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(width: 26, height: 26)
+                        .background(Color.white.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help(L.browseFiles)
+                Button {
                     addCollection()
                 } label: {
                     Image(systemName: "plus")
@@ -126,6 +137,14 @@ struct ShelfCollectionBar: View {
             } label: {
                 Label(L.deleteCollection, systemImage: "trash")
             }
+        }
+    }
+
+    private func browseFiles() {
+        let urls = FilePickerHelper.pickFiles()
+        guard !urls.isEmpty else { return }
+        for url in urls {
+            shelf.addFile(at: url)
         }
     }
 

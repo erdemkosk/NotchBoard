@@ -94,6 +94,21 @@ struct HistoryView: View {
                                     )
                                 }
                                 Button {
+                                    renameItem(item)
+                                } label: {
+                                    Label(
+                                        item.displayName == nil ? L.nameItem : L.renameItem,
+                                        systemImage: "pencil"
+                                    )
+                                }
+                                if item.displayName != nil {
+                                    Button {
+                                        viewModel.clipboard.setDisplayName(nil, for: item)
+                                    } label: {
+                                        Label(L.removeName, systemImage: "character.cursor.ibeam")
+                                    }
+                                }
+                                Button {
                                     if let tag = TagPrompt.run() {
                                         viewModel.clipboard.addTag(tag, to: item)
                                     }
@@ -142,6 +157,17 @@ struct HistoryView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func renameItem(_ item: ClipboardItem) {
+        guard let name = TextPrompt.run(
+            title: L.nameItemTitle,
+            hint: L.nameItemHint,
+            placeholder: L.itemNamePlaceholder,
+            initial: item.displayName ?? "",
+            confirm: L.save
+        ) else { return }
+        viewModel.clipboard.setDisplayName(name, for: item)
     }
 }
 
@@ -209,8 +235,7 @@ private struct ClipboardCard: View {
         }
     }
 
-    /// Full, untruncated text revealed after hovering and waiting (e.g. the
-    /// complete URL for links).
+    /// Full, untruncated payload revealed on hover (custom card name is omitted).
     private var helpText: String {
         switch item.kind {
         case .image: return item.subtitle
@@ -420,11 +445,11 @@ private struct ClipboardCard: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(item.subtitle)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+            Text(item.cardLabel)
+                .font(.system(size: 11, weight: item.displayName == nil ? .medium : .semibold))
+                .foregroundStyle(item.displayName == nil ? Color.secondary : Color.white.opacity(0.9))
                 .lineLimit(1)
-                .truncationMode(item.kind == .link ? .middle : .tail)
+                .truncationMode(item.kind == .link && item.displayName == nil ? .middle : .tail)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -509,7 +534,7 @@ private struct DragPreview: View {
                     .frame(width: 80, height: 80)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
             } else {
-                Text(item.text ?? item.subtitle)
+                Text(item.displayName ?? item.text ?? item.subtitle)
                     .font(.system(size: 13))
                     .lineLimit(3)
                     .padding(10)
@@ -528,31 +553,55 @@ struct EmptyState: View {
     let icon: String
     let title: String
     let subtitle: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
 
     @State private var appeared = false
     @State private var floating = false
 
     var body: some View {
         GeometryReader { geo in
-            let isCompact = geo.size.height < 240
-            VStack(spacing: isCompact ? 8 : 16) {
-                if geo.size.height > 140 {
+            let isCompact = geo.size.height < 240 || geo.size.width < 300
+            let textWidth = min(geo.size.width - 24, isCompact ? 220 : 280)
+            VStack(spacing: isCompact ? 6 : 14) {
+                if geo.size.height > 130 && geo.size.width > 200 {
                     illustration(isCompact: isCompact)
                 }
-                VStack(spacing: isCompact ? 3 : 7) {
+                VStack(spacing: isCompact ? 3 : 6) {
                     Text(title)
-                        .font(.system(size: isCompact ? 14 : 16, weight: .semibold))
+                        .font(.system(size: isCompact ? 13 : 16, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: textWidth)
                     Text(subtitle)
-                        .font(.system(size: isCompact ? 11 : 12.5))
+                        .font(.system(size: isCompact ? 10.5 : 12.5))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: isCompact ? 240 : 280)
+                        .frame(maxWidth: textWidth)
+                    if let actionTitle, let action {
+                        Button(action: action) {
+                            Label(actionTitle, systemImage: "folder")
+                                .font(.system(size: isCompact ? 10.5 : 12, weight: .medium))
+                                .foregroundStyle(.black)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .padding(.horizontal, isCompact ? 10 : 14)
+                                .padding(.vertical, isCompact ? 6 : 7)
+                                .frame(maxWidth: textWidth)
+                                .background(Color.white, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, isCompact ? 2 : 6)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(isCompact ? 10 : 30)
+            .offset(y: action == nil ? 0 : (isCompact ? -8 : -18))
+            .padding(.horizontal, isCompact ? 8 : 24)
+            .padding(.vertical, isCompact ? 8 : 24)
             .opacity(appeared ? 1 : 0)
             .scaleEffect(appeared ? 1 : 0.92)
         }

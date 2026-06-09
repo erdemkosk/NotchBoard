@@ -176,6 +176,7 @@ final class NotchViewModel: ObservableObject {
             result = result.filter { item in
                 (item.text?.lowercased().contains(q) ?? false)
                     || item.subtitle.lowercased().contains(q)
+                    || (item.displayName?.lowercased().contains(q) ?? false)
                     || (item.sourceAppName?.lowercased().contains(q) ?? false)
                     || item.tags.contains { $0.lowercased().contains(q) }
             }

@@ -54,12 +54,20 @@ struct ExpandedPanel: View {
         .shadow(color: .black.opacity(0.5), radius: 30, y: 14)
         .shadow(color: .accentColor.opacity(0.28), radius: 26, y: 6)
         .onAppear {
+            if viewModel.selectedTab == .shelf {
+                FilePickerHelper.warmUp()
+            }
             guard viewModel.pendingSearchFocus else { return }
             viewModel.pendingSearchFocus = false
             // The panel mounts via a spring animation; defer a tick so the field
             // exists and reliably accepts first responder.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 searchFocused = true
+            }
+        }
+        .onChange(of: viewModel.selectedTab) { _, tab in
+            if tab == .shelf {
+                FilePickerHelper.warmUp()
             }
         }
     }

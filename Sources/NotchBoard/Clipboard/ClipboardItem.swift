@@ -31,6 +31,8 @@ struct ClipboardItem: Identifiable, Equatable {
     var isPinned: Bool
     /// User-defined labels for categorization (e.g. "API", "key").
     var tags: [String]
+    /// Optional custom name shown on the card instead of the auto subtitle.
+    var displayName: String?
 
     init(
         id: UUID = UUID(),
@@ -42,7 +44,8 @@ struct ClipboardItem: Identifiable, Equatable {
         sourceAppIcon: NSImage? = nil,
         isFavorite: Bool = false,
         isPinned: Bool = false,
-        tags: [String] = []
+        tags: [String] = [],
+        displayName: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -54,6 +57,7 @@ struct ClipboardItem: Identifiable, Equatable {
         self.isFavorite = isFavorite
         self.isPinned = isPinned
         self.tags = tags
+        self.displayName = displayName
     }
 
     static func == (lhs: ClipboardItem, rhs: ClipboardItem) -> Bool {
@@ -100,6 +104,14 @@ struct ClipboardItem: Identifiable, Equatable {
         let g = Int(round(c.greenComponent * 255))
         let b = Int(round(c.blueComponent * 255))
         return "\(r) \(g) \(b)"
+    }
+
+    /// Label shown in the card footer — custom name when set, otherwise auto subtitle.
+    var cardLabel: String {
+        if let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return subtitle
     }
 
     /// A short human-readable subtitle shown on the card.

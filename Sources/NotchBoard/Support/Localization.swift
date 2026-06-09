@@ -81,6 +81,12 @@ enum L {
     static var cancel: String { t("Cancel", "İptal") }
     static var removeTag: String { t("Remove tag", "Etiketi kaldır") }
     static var tags: String { t("Tags", "Etiketler") }
+    static var nameItem: String { t("Name…", "İsim ver…") }
+    static var renameItem: String { t("Rename…", "Yeniden adlandır…") }
+    static var nameItemTitle: String { t("Name this item", "Bu öğeye isim ver") }
+    static var nameItemHint: String { t("Give this clipboard item a short label to find it faster.", "Bu pano öğesine kısa bir etiket ver; daha kolay bulursun.") }
+    static var itemNamePlaceholder: String { t("e.g. API key, logo, meeting notes", "ör. API anahtarı, logo, toplantı notları") }
+    static var removeName: String { t("Remove name", "İsmi kaldır") }
 
     static var emptyHistoryTitle: String { t("No clipboard history yet", "Henüz pano geçmişi yok") }
     static var emptyHistorySubtitle: String { t("Copy text, links, images or files and they'll appear here.", "Metin, link, görsel veya dosya kopyala; burada görünür.") }
@@ -90,6 +96,13 @@ enum L {
     static var noMatchesSubtitle: String { t("Try a different search.", "Farklı bir arama dene.") }
     static var emptyShelfTitle: String { t("Drop files here", "Dosyaları buraya bırak") }
     static var emptyShelfSubtitle: String { t("Drag images or files onto the notch to keep them handy, then drag them into any app.", "Görsel veya dosyaları notch'a sürükleyip sakla, sonra herhangi bir uygulamaya sürükle.") }
+    static var browseFiles: String { t("Browse…", "Gözat…") }
+    static var browseFilesTitle: String { t("Add to Shelf", "Rafa ekle") }
+    static var browseFilesMessage: String { t("Select files or folders to add to this collection.", "Bu koleksiyona eklemek için dosya veya klasör seç.") }
+    static var choose: String { t("Choose", "Seç") }
+    static var saveTo: String { t("Save to…", "Kaydet…") }
+    static var saveToTitle: String { t("Save file", "Dosyayı kaydet") }
+    static var download: String { t("Download", "İndir") }
 
     // Shelf collections
     static var shelfDefaultName: String { t("Shelf", "Raf") }
