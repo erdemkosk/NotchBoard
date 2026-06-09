@@ -68,8 +68,22 @@ final class ClipboardManager: ObservableObject {
                 pasteboard.setString(resolved, forType: .string)
             }
         case .image:
-            if let url = item.fileURL, let image = NSImage(contentsOf: url) {
-                pasteboard.writeObjects([image])
+            if let url = item.fileURL, let data = try? Data(contentsOf: url) {
+                let ext = url.pathExtension.lowercased()
+                let isPng = (ext == "png" || ext == "jpg" || ext == "jpeg")
+                let mainType: NSPasteboard.PasteboardType = isPng ? .png : .tiff
+                
+                pasteboard.declareTypes([.png, .tiff], owner: nil)
+                pasteboard.setData(data, forType: mainType)
+                
+                if isPng, let image = NSImage(contentsOf: url), let tiffData = image.tiffRepresentation {
+                    pasteboard.setData(tiffData, forType: .tiff)
+                } else if !isPng, let image = NSImage(contentsOf: url),
+                          let tiff = image.tiffRepresentation,
+                          let rep = NSBitmapImageRep(data: tiff),
+                          let pngData = rep.representation(using: .png, properties: [:]) {
+                    pasteboard.setData(pngData, forType: .png)
+                }
             }
         case .file:
             if let url = item.fileURL { pasteboard.writeObjects([url as NSURL]) }
@@ -171,17 +185,16 @@ final class ClipboardManager: ObservableObject {
         }
 
         // 2. Images.
-        if let images = pasteboard.readObjects(forClasses: [NSImage.self]) as? [NSImage],
-           let image = images.first,
-           pasteboard.string(forType: .string) == nil {
-            if let url = cacheImage(image) {
-                return ClipboardItem(
-                    kind: .image,
-                    fileURL: url,
-                    sourceAppName: appName,
-                    sourceAppIcon: appIcon
-                )
-            }
+        if let types = pasteboard.types,
+           types.contains(where: { $0 == .png || $0 == .tiff || $0 == .init("public.png") || $0 == .init("public.tiff") }),
+           !types.contains(where: { $0 == .rtf || $0 == .rtfd }),
+           let url = cacheImageFromPasteboard() {
+            return ClipboardItem(
+                kind: .image,
+                fileURL: url,
+                sourceAppName: appName,
+                sourceAppIcon: appIcon
+            )
         }
 
         // 3. Text (and derived link / color).
@@ -319,13 +332,26 @@ final class ClipboardManager: ObservableObject {
         items = kept
     }
 
-    private func cacheImage(_ image: NSImage) -> URL? {
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return nil }
+    private func cacheImageFromPasteboard() -> URL? {
+        let pngType = NSPasteboard.PasteboardType.png
+        let tiffType = NSPasteboard.PasteboardType.tiff
+        
+        var data: Data?
+        var ext = "png"
+        
+        if let pngData = pasteboard.data(forType: pngType) {
+            data = pngData
+            ext = "png"
+        } else if let tiffData = pasteboard.data(forType: tiffType) {
+            data = tiffData
+            ext = "tiff"
+        }
+        
+        guard let data else { return nil }
+        
         let url = Persistence.cacheDirectory
-            .appendingPathComponent("clip-\(UUID().uuidString).png")
-        try? png.write(to: url)
+            .appendingPathComponent("clip-\(UUID().uuidString).\(ext)")
+        try? data.write(to: url)
         return url
     }
 
