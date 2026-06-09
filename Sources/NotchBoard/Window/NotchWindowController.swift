@@ -99,6 +99,13 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        // Live-update the screen capture hide setting on the window.
+        settings.$hideFromScreenCapture
+            .sink { [weak self] hide in
+                self?.window?.sharingType = hide ? .none : .readOnly
+            }
+            .store(in: &cancellables)
     }
 
     /// Drains the Finder-extension inbox and stashes any queued files on the

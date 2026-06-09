@@ -40,6 +40,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoPasteEnabled, forKey: Keys.autoPasteEnabled) }
     }
 
+    /// Whether the panel is hidden from screenshots and screen recordings.
+    @Published var hideFromScreenCapture: Bool {
+        didSet { defaults.set(hideFromScreenCapture, forKey: Keys.hideFromScreenCapture) }
+    }
+
     /// Configured system-wide hotkey code.
     @Published var hotkeyCode: Int {
         didSet { defaults.set(hotkeyCode, forKey: Keys.hotkeyCode) }
@@ -106,6 +111,7 @@ final class AppSettings: ObservableObject {
         static let triggerPillHeight = "triggerPillHeight"
         static let triggerPillCornerRadius = "triggerPillCornerRadius"
         static let autoPasteEnabled = "autoPasteEnabled"
+        static let hideFromScreenCapture = "hideFromScreenCapture"
         static let hotkeyCode = "hotkeyCode"
         static let hotkeyModifiers = "hotkeyModifiers"
     }
@@ -120,6 +126,7 @@ final class AppSettings: ObservableObject {
             Keys.triggerPillHeight: Self.defaultPillHeight,
             Keys.triggerPillCornerRadius: Self.defaultPillCorner,
             Keys.autoPasteEnabled: false,
+            Keys.hideFromScreenCapture: true,
             Keys.hotkeyCode: kVK_ANSI_V,
             Keys.hotkeyModifiers: cmdKey | shiftKey
         ])
@@ -134,6 +141,7 @@ final class AppSettings: ObservableObject {
         triggerPillHeight = defaults.double(forKey: Keys.triggerPillHeight)
         triggerPillCornerRadius = defaults.double(forKey: Keys.triggerPillCornerRadius)
         autoPasteEnabled = defaults.bool(forKey: Keys.autoPasteEnabled)
+        hideFromScreenCapture = defaults.bool(forKey: Keys.hideFromScreenCapture)
         hotkeyCode = defaults.integer(forKey: Keys.hotkeyCode)
         hotkeyModifiers = defaults.integer(forKey: Keys.hotkeyModifiers)
     }

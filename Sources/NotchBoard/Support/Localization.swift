@@ -131,6 +131,8 @@ enum L {
     static var keyboardShortcut: String { t("Keyboard Shortcut", "Klavye Kısayolu") }
     static var autoPaste: String { t("Auto-Paste copied item", "Otomatik Yapıştırma") }
     static var autoPasteHint: String { t("Automatically paste the clicked/selected item into the frontmost app. Requires Accessibility permission.", "Tıklanan veya seçilen öğeyi o an aktif olan uygulamaya otomatik olarak yapıştırır. Erişilebilirlik izni gerektirir.") }
+    static var hideFromScreenCapture: String { t("Hide from screen recordings", "Ekran kayıtlarından gizle") }
+    static var hideFromScreenCaptureHint: String { t("Prevents the NotchBoard panel from appearing in screenshots, video recordings, and screen sharing.", "NotchBoard panelinin ekran resimlerinde, video kayıtlarında ve ekran paylaşımlarında görünmesini engeller.") }
 
     // Trigger pill (non-notch screens)
     static var triggerPillSection: String { t("Trigger pill (screens without a notch)", "Tetikleyici pil (notch'suz ekranlar)") }
