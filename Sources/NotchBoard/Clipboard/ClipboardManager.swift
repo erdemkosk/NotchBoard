@@ -25,6 +25,20 @@ final class ClipboardManager: ObservableObject {
         .init("com.apple.is-sensitive")
     ]
 
+    private struct ImageFormatInfo {
+        let type: NSPasteboard.PasteboardType
+        let ext: String
+    }
+
+    private static let imageFormats: [ImageFormatInfo] = [
+        ImageFormatInfo(type: .init("org.webmproject.webp"), ext: "webp"),
+        ImageFormatInfo(type: .init("public.heic"), ext: "heic"),
+        ImageFormatInfo(type: .init("com.compuserve.gif"), ext: "gif"),
+        ImageFormatInfo(type: .init("public.jpeg"), ext: "jpg"),
+        ImageFormatInfo(type: .png, ext: "png"),
+        ImageFormatInfo(type: .tiff, ext: "tiff")
+    ]
+
     init() {
         lastChangeCount = pasteboard.changeCount
         loadFromDisk()
@@ -68,21 +82,42 @@ final class ClipboardManager: ObservableObject {
                 pasteboard.setString(resolved, forType: .string)
             }
         case .image:
-            if let url = item.fileURL, let data = try? Data(contentsOf: url) {
+            if let url = item.fileURL, let data = try? Data(contentsOf: url),
+               let image = NSImage(contentsOf: url) {
                 let ext = url.pathExtension.lowercased()
-                let isPng = (ext == "png" || ext == "jpg" || ext == "jpeg")
-                let mainType: NSPasteboard.PasteboardType = isPng ? .png : .tiff
                 
-                pasteboard.declareTypes([.png, .tiff], owner: nil)
-                pasteboard.setData(data, forType: mainType)
+                let nativeType: NSPasteboard.PasteboardType
+                switch ext {
+                case "png": nativeType = .png
+                case "jpg", "jpeg": nativeType = .init("public.jpeg")
+                case "gif": nativeType = .init("com.compuserve.gif")
+                case "heic": nativeType = .init("public.heic")
+                case "webp": nativeType = .init("org.webmproject.webp")
+                case "tiff", "tif": nativeType = .tiff
+                default: nativeType = .png
+                }
                 
-                if isPng, let image = NSImage(contentsOf: url), let tiffData = image.tiffRepresentation {
-                    pasteboard.setData(tiffData, forType: .tiff)
-                } else if !isPng, let image = NSImage(contentsOf: url),
-                          let tiff = image.tiffRepresentation,
-                          let rep = NSBitmapImageRep(data: tiff),
-                          let pngData = rep.representation(using: .png, properties: [:]) {
-                    pasteboard.setData(pngData, forType: .png)
+                var declaredTypes: [NSPasteboard.PasteboardType] = [nativeType]
+                if nativeType != .png { declaredTypes.append(.png) }
+                if nativeType != .tiff { declaredTypes.append(.tiff) }
+                
+                pasteboard.declareTypes(declaredTypes, owner: nil)
+                pasteboard.setData(data, forType: nativeType)
+                
+                if nativeType != .png {
+                    if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                        let rep = NSBitmapImageRep(cgImage: cgImage)
+                        rep.size = image.size
+                        if let pngData = rep.representation(using: .png, properties: [:]) {
+                            pasteboard.setData(pngData, forType: .png)
+                        }
+                    }
+                }
+                
+                if nativeType != .tiff {
+                    if let tiffData = image.tiffRepresentation {
+                        pasteboard.setData(tiffData, forType: .tiff)
+                    }
                 }
             }
         case .file:
@@ -140,13 +175,25 @@ final class ClipboardManager: ObservableObject {
 
     func remove(_ item: ClipboardItem) {
         items.removeAll { $0.id == item.id }
-        if let url = item.fileURL { try? FileManager.default.removeItem(at: url) }
+        if let url = item.fileURL, item.kind != .file {
+            try? FileManager.default.removeItem(at: url)
+            let parentDir = url.deletingLastPathComponent()
+            if parentDir.lastPathComponent == item.id.uuidString {
+                try? FileManager.default.removeItem(at: parentDir)
+            }
+        }
         persist()
     }
 
     func clearAll() {
         for item in items where item.fileURL != nil {
-            try? FileManager.default.removeItem(at: item.fileURL!)
+            if let url = item.fileURL, item.kind != .file {
+                try? FileManager.default.removeItem(at: url)
+                let parentDir = url.deletingLastPathComponent()
+                if parentDir.lastPathComponent == item.id.uuidString {
+                    try? FileManager.default.removeItem(at: parentDir)
+                }
+            }
         }
         items.removeAll()
         persist()
@@ -186,15 +233,20 @@ final class ClipboardManager: ObservableObject {
 
         // 2. Images.
         if let types = pasteboard.types,
-           types.contains(where: { $0 == .png || $0 == .tiff || $0 == .init("public.png") || $0 == .init("public.tiff") }),
-           !types.contains(where: { $0 == .rtf || $0 == .rtfd }),
-           let url = cacheImageFromPasteboard() {
-            return ClipboardItem(
-                kind: .image,
-                fileURL: url,
-                sourceAppName: appName,
-                sourceAppIcon: appIcon
-            )
+           types.contains(where: { t in
+               Self.imageFormats.contains(where: { $0.type == t })
+           }),
+           !types.contains(where: { $0 == .rtf || $0 == .rtfd }) {
+            let itemId = UUID()
+            if let url = cacheImageFromPasteboard(itemId: itemId) {
+                return ClipboardItem(
+                    id: itemId,
+                    kind: .image,
+                    fileURL: url,
+                    sourceAppName: appName,
+                    sourceAppIcon: appIcon
+                )
+            }
         }
 
         // 3. Text (and derived link / color).
@@ -255,7 +307,7 @@ final class ClipboardManager: ObservableObject {
         var changed = false
         items.removeAll { item in
             guard !item.isPinned, !item.isFavorite, item.createdAt < cutoff else { return false }
-            if let url = item.fileURL { try? FileManager.default.removeItem(at: url) }
+            if let url = item.fileURL, item.kind != .file { try? FileManager.default.removeItem(at: url) }
             changed = true
             return true
         }
@@ -325,34 +377,72 @@ final class ClipboardManager: ObservableObject {
             } else if trimmableCount < maxItems {
                 kept.append(item)
                 trimmableCount += 1
-            } else if let url = item.fileURL {
+            } else if let url = item.fileURL, item.kind != .file {
                 try? FileManager.default.removeItem(at: url)
+                let parentDir = url.deletingLastPathComponent()
+                if parentDir.lastPathComponent == item.id.uuidString {
+                    try? FileManager.default.removeItem(at: parentDir)
+                }
             }
         }
         items = kept
     }
 
-    private func cacheImageFromPasteboard() -> URL? {
-        let pngType = NSPasteboard.PasteboardType.png
-        let tiffType = NSPasteboard.PasteboardType.tiff
-        
+    private func getOriginalImageName(ext: String) -> String {
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           let first = urls.first {
+            let lastComponent = first.lastPathComponent
+            if !lastComponent.isEmpty && lastComponent != "/" {
+                let base = (lastComponent as NSString).deletingPathExtension
+                return "\(base).\(ext)"
+            }
+        }
+        return "image-\(Int(Date().timeIntervalSince1970)).\(ext)"
+    }
+
+    private func cacheImageFromPasteboard(itemId: UUID) -> URL? {
         var data: Data?
         var ext = "png"
         
-        if let pngData = pasteboard.data(forType: pngType) {
-            data = pngData
-            ext = "png"
-        } else if let tiffData = pasteboard.data(forType: tiffType) {
-            data = tiffData
-            ext = "tiff"
+        for format in Self.imageFormats {
+            if let pasteboardData = pasteboard.data(forType: format.type), !pasteboardData.isEmpty {
+                data = pasteboardData
+                ext = format.ext
+                break
+            }
         }
         
-        guard let data else { return nil }
+        let filename = getOriginalImageName(ext: ext)
+        let itemDir = Persistence.cacheDirectory.appendingPathComponent(itemId.uuidString, isDirectory: true)
+        Persistence.ensureDirectory(itemDir)
+        let url = itemDir.appendingPathComponent(filename)
         
-        let url = Persistence.cacheDirectory
-            .appendingPathComponent("clip-\(UUID().uuidString).\(ext)")
-        try? data.write(to: url)
-        return url
+        if let finalData = data {
+            do {
+                try finalData.write(to: url)
+                return url
+            } catch {
+                print("Failed to write clipboard image data: \(error)")
+            }
+        }
+        
+        if let images = pasteboard.readObjects(forClasses: [NSImage.self]) as? [NSImage],
+           let image = images.first {
+            if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let rep = NSBitmapImageRep(cgImage: cgImage)
+                rep.size = image.size
+                if let pngData = rep.representation(using: .png, properties: [:]) {
+                    do {
+                        try pngData.write(to: url)
+                        return url
+                    } catch {
+                        print("Failed to write fallback clipboard image: \(error)")
+                    }
+                }
+            }
+        }
+        
+        return nil
     }
 
     // MARK: - Persistence
@@ -391,8 +481,15 @@ final class ClipboardManager: ObservableObject {
         items = stored.compactMap { s in
             var fileURL: URL?
             if let name = s.fileName {
-                let candidate = Persistence.cacheDirectory.appendingPathComponent(name)
-                fileURL = FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+                let flatCandidate = Persistence.cacheDirectory.appendingPathComponent(name)
+                if FileManager.default.fileExists(atPath: flatCandidate.path) {
+                    fileURL = flatCandidate
+                } else {
+                    let nestedCandidate = Persistence.cacheDirectory.appendingPathComponent(s.id.uuidString).appendingPathComponent(name)
+                    if FileManager.default.fileExists(atPath: nestedCandidate.path) {
+                        fileURL = nestedCandidate
+                    }
+                }
             }
             // Drop entries whose cached file vanished.
             if (s.kind == .image || s.kind == .file) && fileURL == nil { return nil }

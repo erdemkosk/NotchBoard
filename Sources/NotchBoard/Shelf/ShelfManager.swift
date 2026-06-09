@@ -109,40 +109,80 @@ final class ShelfManager: ObservableObject {
 
     // MARK: - Items
 
+    private func destination(for name: String, itemId: UUID) -> URL {
+        let dir = shelfDirectory.appendingPathComponent(itemId.uuidString, isDirectory: true)
+        Persistence.ensureDirectory(dir)
+        return dir.appendingPathComponent(name)
+    }
+
     /// Copies a source file into the shelf cache and registers it in the given
     /// collection (defaults to the selected one).
-    @discardableResult
-    func addFile(at sourceURL: URL, to collectionID: UUID? = nil) -> ShelfItem? {
-        // Ignore drops of files that already live in the shelf (dragging an
-        // item out and back in) so we don't create duplicates.
-        if isInShelf(sourceURL) { return nil }
-        let safeName = sourceURL.lastPathComponent
-        let dest = uniqueDestination(for: safeName)
-        do {
-            try FileManager.default.copyItem(at: sourceURL, to: dest)
-        } catch {
-            return nil
+    func addFile(at sourceURL: URL, suggestedName: String? = nil, deleteSourceOnSuccess: Bool = false, to collectionID: UUID? = nil) {
+        print("[DEBUG] --- addFile: sourceURL: \(sourceURL), suggestedName: \(String(describing: suggestedName))")
+        
+        let cid = collectionID ?? selectedCollectionID
+        let itemsSnapshot = self.items
+        let shelfDir = self.shelfDirectory
+        
+        Task.detached(priority: .userInitiated) {
+            // Check duplicates in the background to avoid main-thread disk I/O
+            if Self.checkIsInShelf(sourceURL, shelfDirectory: shelfDir, items: itemsSnapshot) {
+                print("[DEBUG] --- addFile: Item already in shelf, skipping.")
+                return
+            }
+            
+            var safeName = sourceURL.lastPathComponent
+            if let suggestedName = suggestedName, !suggestedName.isEmpty {
+                let ext = sourceURL.pathExtension
+                if !ext.isEmpty && !suggestedName.lowercased().hasSuffix(".\(ext.lowercased())") {
+                    safeName = "\(suggestedName).\(ext)"
+                } else {
+                    safeName = suggestedName
+                }
+            }
+
+            let itemId = UUID()
+            let dir = shelfDir.appendingPathComponent(itemId.uuidString, isDirectory: true)
+            // Create directory in background to avoid blocking main thread
+            if !FileManager.default.fileExists(atPath: dir.path) {
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            }
+            let dest = dir.appendingPathComponent(safeName)
+            
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: dest)
+                if deleteSourceOnSuccess {
+                    try? FileManager.default.removeItem(at: sourceURL)
+                }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    let item = ShelfItem(
+                        id: itemId,
+                        fileURL: dest,
+                        displayName: safeName,
+                        collectionID: cid
+                    )
+                    self.items.insert(item, at: 0)
+                    self.persist()
+                }
+            } catch {
+                print("Failed to copy item in background: \(error)")
+            }
         }
-        let item = ShelfItem(
-            fileURL: dest,
-            displayName: safeName,
-            collectionID: collectionID ?? selectedCollectionID
-        )
-        items.insert(item, at: 0)
-        persist()
-        return item
     }
 
     /// Writes raw image data (e.g. a dropped bitmap with no file URL) to the shelf.
     @discardableResult
     func addImageData(_ data: Data, suggestedName: String = "image.png", to collectionID: UUID? = nil) -> ShelfItem? {
-        let dest = uniqueDestination(for: suggestedName)
+        let itemId = UUID()
+        let dest = destination(for: suggestedName, itemId: itemId)
         do {
             try data.write(to: dest)
         } catch {
             return nil
         }
         let item = ShelfItem(
+            id: itemId,
             fileURL: dest,
             displayName: suggestedName,
             collectionID: collectionID ?? selectedCollectionID
@@ -153,16 +193,19 @@ final class ShelfManager: ObservableObject {
     }
 
     /// Promotes a clipboard image/file into the shelf.
-    @discardableResult
-    func add(from clip: ClipboardItem) -> ShelfItem? {
-        guard let url = clip.fileURL else { return nil }
-        return addFile(at: url)
+    func add(from clip: ClipboardItem) {
+        guard let url = clip.fileURL else { return }
+        addFile(at: url)
     }
 
     func remove(_ item: ShelfItem) {
         items.removeAll { $0.id == item.id }
         selection.remove(item.id)
         try? FileManager.default.removeItem(at: item.fileURL)
+        let parentDir = item.fileURL.deletingLastPathComponent()
+        if parentDir.lastPathComponent == item.id.uuidString {
+            try? FileManager.default.removeItem(at: parentDir)
+        }
         persist()
     }
 
@@ -170,6 +213,10 @@ final class ShelfManager: ObservableObject {
     func remove(ids: Set<UUID>) {
         for item in items where ids.contains(item.id) {
             try? FileManager.default.removeItem(at: item.fileURL)
+            let parentDir = item.fileURL.deletingLastPathComponent()
+            if parentDir.lastPathComponent == item.id.uuidString {
+                try? FileManager.default.removeItem(at: parentDir)
+            }
         }
         items.removeAll { ids.contains($0.id) }
         selection.subtract(ids)
@@ -185,6 +232,10 @@ final class ShelfManager: ObservableObject {
     func clearAll() {
         for item in items {
             try? FileManager.default.removeItem(at: item.fileURL)
+            let parentDir = item.fileURL.deletingLastPathComponent()
+            if parentDir.lastPathComponent == item.id.uuidString {
+                try? FileManager.default.removeItem(at: parentDir)
+            }
         }
         items.removeAll()
         selection.removeAll()
@@ -208,11 +259,20 @@ final class ShelfManager: ObservableObject {
 
     // MARK: - Dedup helpers
 
+    // MARK: - Dedup helpers
+
     /// Whether the URL already points inside the shelf storage directory.
-    private func isInShelf(_ url: URL) -> Bool {
+    private nonisolated static func checkIsInShelf(_ url: URL, shelfDirectory: URL, items: [ShelfItem]) -> Bool {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         let shelfDir = shelfDirectory.resolvingSymlinksInPath().standardizedFileURL
         if resolved.deletingLastPathComponent() == shelfDir { return true }
+        if resolved.deletingLastPathComponent().deletingLastPathComponent() == shelfDir { return true }
+        
+        let resolvedPath = resolved.path
+        if items.contains(where: { $0.fileURL.standardizedFileURL.path == resolvedPath }) {
+            return true
+        }
+        
         if items.contains(where: {
             $0.fileURL.resolvingSymlinksInPath().standardizedFileURL == resolved
         }) { return true }
@@ -225,11 +285,11 @@ final class ShelfManager: ObservableObject {
         guard let droppedSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
             return false
         }
-        let droppedBase = Self.baseName(url.lastPathComponent)
+        let droppedBase = baseName(url.lastPathComponent)
         return items.contains { item in
             let itemSize = (try? item.fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
             guard itemSize == droppedSize else { return false }
-            let names = [item.fileURL.lastPathComponent, item.displayName].map(Self.baseName)
+            let names = [item.fileURL.lastPathComponent, item.displayName].map(baseName)
             return names.contains { $0 == droppedBase || droppedBase.hasPrefix($0) || $0.hasPrefix(droppedBase) }
         }
     }
@@ -246,18 +306,7 @@ final class ShelfManager: ObservableObject {
         return b.trimmingCharacters(in: .whitespaces)
     }
 
-    private func uniqueDestination(for name: String) -> URL {
-        let base = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
-        var candidate = shelfDirectory.appendingPathComponent(name)
-        var counter = 1
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            let newName = ext.isEmpty ? "\(base)-\(counter)" : "\(base)-\(counter).\(ext)"
-            candidate = shelfDirectory.appendingPathComponent(newName)
-            counter += 1
-        }
-        return candidate
-    }
+
 
     // MARK: - Persistence
 
@@ -296,10 +345,19 @@ final class ShelfManager: ObservableObject {
             collections = envelope.collections
             let fallbackID = envelope.collections.first?.id
             items = envelope.items.compactMap { s in
-                let url = shelfDirectory.appendingPathComponent(s.fileName)
-                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-                guard let cid = s.collectionID ?? fallbackID else { return nil }
-                return ShelfItem(id: s.id, fileURL: url, displayName: s.displayName, addedAt: s.addedAt, collectionID: cid)
+                let flatUrl = shelfDirectory.appendingPathComponent(s.fileName)
+                if FileManager.default.fileExists(atPath: flatUrl.path) {
+                    guard let cid = s.collectionID ?? fallbackID else { return nil }
+                    return ShelfItem(id: s.id, fileURL: flatUrl, displayName: s.displayName, addedAt: s.addedAt, collectionID: cid)
+                }
+                
+                let nestedUrl = shelfDirectory.appendingPathComponent(s.id.uuidString).appendingPathComponent(s.fileName)
+                if FileManager.default.fileExists(atPath: nestedUrl.path) {
+                    guard let cid = s.collectionID ?? fallbackID else { return nil }
+                    return ShelfItem(id: s.id, fileURL: nestedUrl, displayName: s.displayName, addedAt: s.addedAt, collectionID: cid)
+                }
+                
+                return nil
             }
             return
         }

@@ -159,11 +159,12 @@ struct ShelfCollectionBar: View {
             DragProviders.draggingShelfItemID = nil
             return true
         }
-        var added = false
-        for url in urls where url.isFileURL {
-            if shelf.addFile(at: url, to: collectionID) != nil { added = true }
+        let fileURLs = urls.filter { $0.isFileURL }
+        guard !fileURLs.isEmpty else { return false }
+        for url in fileURLs {
+            shelf.addFile(at: url, to: collectionID)
         }
-        return added
+        return true
     }
 
     private static func colorSwatch(_ hex: String, selected: Bool) -> NSImage {

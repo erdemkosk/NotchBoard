@@ -80,6 +80,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(triggerPillCornerRadius, forKey: Keys.triggerPillCornerRadius) }
     }
 
+    @Published var horizontalOffset: Double {
+        didSet { defaults.set(horizontalOffset, forKey: Keys.horizontalOffset) }
+    }
+
     // Allowed panel size range.
     static let minPanelWidth: Double = 460
     static let maxPanelWidth: Double = 1200
@@ -110,6 +114,7 @@ final class AppSettings: ObservableObject {
         static let triggerPillWidth = "triggerPillWidth"
         static let triggerPillHeight = "triggerPillHeight"
         static let triggerPillCornerRadius = "triggerPillCornerRadius"
+        static let horizontalOffset = "horizontalOffset"
         static let autoPasteEnabled = "autoPasteEnabled"
         static let hideFromScreenCapture = "hideFromScreenCapture"
         static let hotkeyCode = "hotkeyCode"
@@ -125,6 +130,7 @@ final class AppSettings: ObservableObject {
             Keys.triggerPillWidth: Self.defaultPillWidth,
             Keys.triggerPillHeight: Self.defaultPillHeight,
             Keys.triggerPillCornerRadius: Self.defaultPillCorner,
+            Keys.horizontalOffset: 0.0,
             Keys.autoPasteEnabled: false,
             Keys.hideFromScreenCapture: true,
             Keys.hotkeyCode: kVK_ANSI_V,
@@ -140,6 +146,7 @@ final class AppSettings: ObservableObject {
         triggerPillWidth = defaults.double(forKey: Keys.triggerPillWidth)
         triggerPillHeight = defaults.double(forKey: Keys.triggerPillHeight)
         triggerPillCornerRadius = defaults.double(forKey: Keys.triggerPillCornerRadius)
+        horizontalOffset = defaults.double(forKey: Keys.horizontalOffset)
         autoPasteEnabled = defaults.bool(forKey: Keys.autoPasteEnabled)
         hideFromScreenCapture = defaults.bool(forKey: Keys.hideFromScreenCapture)
         hotkeyCode = defaults.integer(forKey: Keys.hotkeyCode)

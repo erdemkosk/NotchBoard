@@ -9,13 +9,6 @@ struct NotchView: View {
             // Transparent backdrop fills the window; only the panel is visible.
             Color.clear
 
-            // Soft glow that pulses around the notch on each capture.
-            CapturePulse(
-                trigger: viewModel.capturePulse,
-                width: viewModel.notchWidth,
-                height: viewModel.notchHeight
-            )
-
             if viewModel.isOpen {
                 ExpandedPanel(viewModel: viewModel)
                     .transition(
@@ -49,7 +42,7 @@ struct NotchView: View {
                         viewModel.hudHoverChanged(hovering)
                     }
                 )
-                .id(viewModel.capturePulse)
+                .id(hudItem.id)
                 .transition(
                     .asymmetric(
                         insertion: .opacity,
@@ -67,36 +60,6 @@ struct NotchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(response: 0.5, dampingFraction: 0.68), value: viewModel.isOpen)
-    }
-}
-
-/// A brief accent-colored glow that blooms around the notch each time something
-/// is captured — a subtle pulse on top of the capture HUD.
-private struct CapturePulse: View {
-    let trigger: Int
-    let width: CGFloat
-    let height: CGFloat
-
-    @State private var opacity: Double = 0
-    @State private var scale: CGFloat = 1.0
-
-    var body: some View {
-        UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12)
-            .stroke(Color.accentColor, lineWidth: 2)
-            .frame(width: width, height: height)
-            .shadow(color: Color.accentColor.opacity(0.9), radius: 8)
-            .opacity(opacity)
-            .scaleEffect(scale, anchor: .top)
-            .allowsHitTesting(false)
-            .onChange(of: trigger) { _, _ in
-                guard trigger > 0 else { return }
-                opacity = 0.6
-                scale = 1.0
-                withAnimation(.easeOut(duration: 0.6)) {
-                    opacity = 0
-                    scale = 1.12
-                }
-            }
     }
 }
 

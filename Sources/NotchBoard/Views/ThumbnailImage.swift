@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Async, cached thumbnail view. Shows a fallback while the thumbnail loads, and
 /// uses the system file icon for non-image files.
@@ -22,7 +23,6 @@ struct ThumbnailImage: View {
                 Image(nsImage: fallbackIcon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .padding(18)
             } else {
                 ProgressView()
                     .controlSize(.small)
@@ -38,7 +38,19 @@ struct ThumbnailImage: View {
             return
         }
         ThumbnailCache.shared.thumbnail(for: url, maxPixel: maxPixel) { result in
-            self.image = result
+            Task { @MainActor in
+                if let result = result {
+                    self.image = result
+                } else {
+                    // Fall back to a lightweight, instant generic icon (without hitting the disk for a path)
+                    let isDir = url.pathExtension.isEmpty
+                    if isDir {
+                        self.image = NSWorkspace.shared.icon(for: .folder)
+                    } else {
+                        self.image = NSWorkspace.shared.icon(for: .item)
+                    }
+                }
+            }
         }
     }
 }

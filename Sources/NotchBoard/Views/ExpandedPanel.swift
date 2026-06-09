@@ -4,6 +4,7 @@ import SwiftUI
 struct ExpandedPanel: View {
     @ObservedObject var viewModel: NotchViewModel
     @State private var resizeBase: CGSize?
+    @State private var dragBaseOffset: CGFloat = 0
     @FocusState private var searchFocused: Bool
 
     /// Vertical space reserved at the top so search + History/Shelf tabs never
@@ -71,6 +72,26 @@ struct ExpandedPanel: View {
         )
         .fill(Color.black)
         .frame(width: viewModel.notchWidth, height: viewModel.notchHeight)
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    guard !viewModel.hasHardwareNotch else { return }
+                    if dragBaseOffset == 0 {
+                        dragBaseOffset = viewModel.horizontalOffset
+                    }
+                    let newOffset = dragBaseOffset + value.translation.width
+                    viewModel.updateHorizontalOffset(newOffset)
+                }
+                .onEnded { _ in
+                    dragBaseOffset = 0
+                    viewModel.commitHorizontalOffset()
+                }
+        )
+        .onHover { inside in
+            guard !viewModel.hasHardwareNotch else { return }
+            if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
+        }
+        .help(viewModel.hasHardwareNotch ? "" : L.t("Drag to move horizontally", "Yatay olarak taşımak için sürükle"))
     }
 
     /// Corner grip: drag to resize the panel. Width grows symmetrically (the

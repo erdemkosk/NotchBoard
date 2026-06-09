@@ -15,31 +15,31 @@ final class ThumbnailCache: @unchecked Sendable {
 
     /// Returns a cached thumbnail synchronously if present.
     func cached(for url: URL, maxPixel: CGFloat) -> NSImage? {
-        cache.object(forKey: key(url, maxPixel))
+        cache.object(forKey: key(url, maxPixel) as NSString)
     }
 
     /// Loads (or generates) a thumbnail off the main thread, then calls back on main.
-    func thumbnail(for url: URL, maxPixel: CGFloat, completion: @escaping (NSImage?) -> Void) {
+    func thumbnail(for url: URL, maxPixel: CGFloat, completion: @escaping @Sendable (NSImage?) -> Void) {
         let k = key(url, maxPixel)
-        if let hit = cache.object(forKey: k) {
+        if let hit = cache.object(forKey: k as NSString) {
             completion(hit)
             return
         }
         queue.async { [weak self] in
             let image = Self.makeThumbnail(url: url, maxPixel: maxPixel)
-            if let image { self?.cache.setObject(image, forKey: k) }
+            if let image { self?.cache.setObject(image, forKey: k as NSString) }
             DispatchQueue.main.async { completion(image) }
         }
     }
 
-    private func key(_ url: URL, _ maxPixel: CGFloat) -> NSString {
-        "\(url.path)|\(Int(maxPixel))" as NSString
+    private func key(_ url: URL, _ maxPixel: CGFloat) -> String {
+        "\(url.path)|\(Int(maxPixel))"
     }
 
     private static func makeThumbnail(url: URL, maxPixel: CGFloat) -> NSImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             // Non-image files: fall back to the system file icon.
-            return nil
+            return NSWorkspace.shared.icon(forFile: url.path)
         }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
@@ -47,7 +47,7 @@ final class ThumbnailCache: @unchecked Sendable {
             kCGImageSourceThumbnailMaxPixelSize: maxPixel
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
+            return NSWorkspace.shared.icon(forFile: url.path)
         }
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
     }

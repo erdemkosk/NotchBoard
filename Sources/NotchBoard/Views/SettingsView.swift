@@ -102,6 +102,25 @@ struct SettingsView: View {
                         step: 1
                     )
                 }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(L.t("Horizontal Position", "Yatay Konum"))
+                        Spacer()
+                        if settings.horizontalOffset != 0 {
+                            Button(L.t("Reset", "Sıfırla")) {
+                                settings.horizontalOffset = 0
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                        }
+                        Text("\(Int(settings.horizontalOffset)) pt").foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: $settings.horizontalOffset,
+                        in: -400...400,
+                        step: 5
+                    )
+                }
                 Text(L.pillHint)
                     .font(.caption)
                     .foregroundStyle(.secondary)

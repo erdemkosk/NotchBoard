@@ -8,6 +8,7 @@ struct ShelfView: View {
     @ObservedObject var viewModel: NotchViewModel
     @State private var isTargeted = false
     @State private var lastSelectedIndex: Int?
+    @State private var isZipping = false
 
     private var shelf: ShelfManager { viewModel.shelf }
     private let columns = [GridItem(.adaptive(minimum: 180, maximum: 250), spacing: 14)]
@@ -53,8 +54,14 @@ struct ShelfView: View {
             toolbarButton(icon: "square.and.arrow.up", help: L.share) {
                 ShareHelper.share(urls: shelf.selectedURLs)
             }
-            toolbarButton(icon: "doc.zipper", help: L.zipSelected) {
-                zipSelected()
+            if isZipping {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 30, height: 26)
+            } else {
+                toolbarButton(icon: "doc.zipper", help: L.zipSelected) {
+                    zipSelected()
+                }
             }
             Menu {
                 ForEach(shelf.collections.filter { $0.id != shelf.selectedCollectionID }) { dest in
@@ -272,7 +279,7 @@ struct ShelfView: View {
                 )
         )
         .onDrop(
-            of: [.fileURL, .image, .png, .tiff, .pdf],
+            of: [.item],
             isTargeted: $isTargeted
         ) { providers in
             handleDrop(providers)
@@ -301,10 +308,17 @@ struct ShelfView: View {
         let urls = shelf.selectedURLs
         guard !urls.isEmpty else { return }
         let name = shelf.selectedCollection?.name ?? "Archive"
-        if let archive = ZipArchiver.makeArchive(of: urls, named: name) {
-            shelf.addFile(at: archive)
-            try? FileManager.default.removeItem(at: archive)
-            shelf.clearSelection()
+        isZipping = true
+        Task {
+            let archive = await Task.detached(priority: .userInitiated) {
+                ZipArchiver.makeArchive(of: urls, named: name)
+            }.value
+            
+            if let archive = archive {
+                shelf.addFile(at: archive, deleteSourceOnSuccess: true)
+                shelf.clearSelection()
+            }
+            isZipping = false
         }
     }
 
@@ -315,28 +329,110 @@ struct ShelfView: View {
             DragProviders.draggingShelfItemID = nil
             return true
         }
+        
+        let dragPboard = NSPasteboard(name: .drag)
+        if let urls = dragPboard.readObjects(forClasses: [NSURL.self], options: [
+            .urlReadingFileURLsOnly: true
+        ]) as? [URL], !urls.isEmpty {
+            for url in urls {
+                viewModel.shelf.addFile(at: url)
+            }
+            return true
+        }
+        
+        let dropFormats = [
+            (uti: "org.webmproject.webp", ext: "webp"),
+            (uti: "public.heic", ext: "heic"),
+            (uti: "com.compuserve.gif", ext: "gif"),
+            (uti: "public.jpeg", ext: "jpg"),
+            (uti: "public.png", ext: "png"),
+            (uti: "public.tiff", ext: "tiff")
+        ]
+        
         var handled = false
         for provider in providers {
-            if provider.canLoadObject(ofClass: NSURL.self) {
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 handled = true
-                _ = provider.loadObject(ofClass: NSURL.self) { object, _ in
-                    guard let url = object as? URL, url.isFileURL else { return }
-                    Task { @MainActor in viewModel.shelf.addFile(at: url) }
+                nonisolated(unsafe) let unsafeProvider = provider
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                    var fileURL: URL?
+                    if let url = item as? URL {
+                        fileURL = url
+                    } else if let nsurl = item as? NSURL {
+                        fileURL = nsurl as URL
+                    } else if let data = item as? Data, let path = String(data: data, encoding: .utf8) {
+                        fileURL = URL(fileURLWithPath: path)
+                    }
+                    
+                    if let url = fileURL {
+                        Task { @MainActor in
+                            viewModel.shelf.addFile(at: url, suggestedName: unsafeProvider.suggestedName)
+                        }
+                    }
                 }
-            } else if provider.canLoadObject(ofClass: NSImage.self) {
+            } else if provider.canLoadObject(ofClass: NSURL.self) {
                 handled = true
-                _ = provider.loadObject(ofClass: NSImage.self) { object, _ in
-                    guard let image = object as? NSImage,
-                          let tiff = image.tiffRepresentation,
-                          let rep = NSBitmapImageRep(data: tiff),
-                          let png = rep.representation(using: .png, properties: [:]) else { return }
-                    Task { @MainActor in
-                        viewModel.shelf.addImageData(png, suggestedName: "dropped-\(Int(Date().timeIntervalSince1970)).png")
+                nonisolated(unsafe) let unsafeProvider = provider
+                _ = provider.loadObject(ofClass: NSURL.self) { object, _ in
+                    guard let url = object as? URL else { return }
+                    if url.isFileURL {
+                        Task { @MainActor in viewModel.shelf.addFile(at: url, suggestedName: unsafeProvider.suggestedName) }
+                    } else {
+                        loadImageData(from: unsafeProvider, url: url, dropFormats: dropFormats)
+                    }
+                }
+            } else {
+                loadImageData(from: provider, url: nil, dropFormats: dropFormats)
+            }
+        }
+        return handled
+    }
+
+    private nonisolated func loadImageData(from provider: NSItemProvider, url: URL?, dropFormats: [(uti: String, ext: String)]) {
+        print("[DEBUG] --- loadImageData: url: \(String(describing: url)), suggestedName: \(String(describing: provider.suggestedName))")
+        if let matchedFormat = dropFormats.first(where: { provider.registeredTypeIdentifiers.contains($0.uti) }) {
+            let urlFilename = url?.lastPathComponent
+            let name = getCleanFilename(urlFilename: urlFilename, suggestedName: provider.suggestedName, ext: matchedFormat.ext)
+            print("[DEBUG] -> matchedFormat: \(matchedFormat.uti), resolved name: \(name)")
+            
+            _ = provider.loadDataRepresentation(forTypeIdentifier: matchedFormat.uti) { data, error in
+                guard let data = data, error == nil else { return }
+                Task { @MainActor in
+                    viewModel.shelf.addImageData(data, suggestedName: name)
+                }
+            }
+        } else if provider.canLoadObject(ofClass: NSImage.self) {
+            let urlFilename = url?.lastPathComponent
+            let name = getCleanFilename(urlFilename: urlFilename, suggestedName: provider.suggestedName, ext: "png")
+            print("[DEBUG] -> fallback to NSImage, resolved name: \(name)")
+            
+            _ = provider.loadObject(ofClass: NSImage.self) { object, _ in
+                guard let image = object as? NSImage else { return }
+                if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    let rep = NSBitmapImageRep(cgImage: cgImage)
+                    rep.size = image.size
+                    if let pngData = rep.representation(using: .png, properties: [:]) {
+                        Task { @MainActor in
+                            viewModel.shelf.addImageData(pngData, suggestedName: name)
+                        }
                     }
                 }
             }
         }
-        return handled
+    }
+
+    private nonisolated func getCleanFilename(urlFilename: String?, suggestedName: String?, ext: String) -> String {
+        if let urlName = urlFilename, !urlName.isEmpty, urlName != "/" {
+            let base = (urlName as NSString).deletingPathExtension
+            return "\(base).\(ext)"
+        }
+        
+        if let sug = suggestedName, !sug.isEmpty {
+            let base = (sug as NSString).deletingPathExtension
+            return "\(base).\(ext)"
+        }
+        
+        return "image-\(Int(Date().timeIntervalSince1970)).\(ext)"
     }
 }
 
@@ -349,14 +445,15 @@ private struct ShelfCard: View {
         VStack(spacing: 0) {
             ZStack {
                 Color.white.opacity(0.05)
-                if item.isImage {
-                    ThumbnailImage(url: item.fileURL, maxPixel: 256, contentMode: .fill)
-                } else {
-                    Image(nsImage: item.thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(18)
-                }
+                ThumbnailImage(
+                    url: item.fileURL,
+                    maxPixel: 256,
+                    contentMode: item.isImage ? .fill : .fit,
+                    fallbackIcon: item.isDirectory
+                        ? NSWorkspace.shared.icon(for: .folder)
+                        : NSWorkspace.shared.icon(for: .item)
+                )
+                .padding(item.isImage ? 0 : 18)
             }
             .frame(height: 92)
             .frame(maxWidth: .infinity)

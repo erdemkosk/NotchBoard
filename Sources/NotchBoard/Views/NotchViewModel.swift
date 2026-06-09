@@ -104,9 +104,8 @@ final class NotchViewModel: ObservableObject {
     /// Increments on each capture to trigger a brief glow pulse on the notch.
     @Published var capturePulse = 0
 
-    /// Shows the capture HUD for ~1.6s (skipped while the panel is open).
+    /// Shows the capture HUD for ~1.6s.
     func showCaptureHUD(_ item: ClipboardItem) {
-        guard !isOpen else { return }
         capturePulse += 1
         hudWorkItem?.cancel()
         withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
@@ -211,6 +210,7 @@ final class NotchViewModel: ObservableObject {
 
     private func finishCopy(_ item: ClipboardItem) {
         lastCopiedID = item.id
+        showCaptureHUD(item)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.lastCopiedID = nil
             self?.requestClose?()
@@ -251,6 +251,8 @@ final class NotchViewModel: ObservableObject {
     // Adjustable, persisted size of the expanded panel.
     @Published var openWidth: CGFloat = CGFloat(AppSettings.defaultPanelWidth)
     @Published var openHeight: CGFloat = CGFloat(AppSettings.defaultPanelHeight)
+    @Published var horizontalOffset: CGFloat = 0.0
+    @Published var screenWidth: CGFloat = 1920
 
     /// Updates the panel size live (clamped). Pass nil to keep a dimension.
     func resizePanel(width: CGFloat? = nil, height: CGFloat? = nil) {
@@ -268,9 +270,19 @@ final class NotchViewModel: ObservableObject {
         AppSettings.shared.panelHeight = Double(openHeight)
     }
 
+    func updateHorizontalOffset(_ offset: CGFloat) {
+        let maxOffset = max(0, (screenWidth - openWidth) / 2)
+        horizontalOffset = min(max(offset, -maxOffset), maxOffset)
+    }
+
+    func commitHorizontalOffset() {
+        AppSettings.shared.horizontalOffset = Double(horizontalOffset)
+    }
+
     init() {
         openWidth = CGFloat(AppSettings.shared.panelWidth)
         openHeight = CGFloat(AppSettings.shared.panelHeight)
+        horizontalOffset = CGFloat(AppSettings.shared.horizontalOffset)
 
         // Bridge nested ObservableObject changes up so SwiftUI re-renders live
         // (otherwise the grid only refreshes when something else forces a redraw).
@@ -288,6 +300,7 @@ final class NotchViewModel: ObservableObject {
 
     func updateMetrics(_ metrics: NotchScreenMetrics) {
         hasHardwareNotch = metrics.hasHardwareNotch
+        screenWidth = metrics.screen.frame.width
         if metrics.hasHardwareNotch {
             notchWidth = metrics.notchWidth
             notchHeight = metrics.notchHeight

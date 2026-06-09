@@ -65,11 +65,11 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
 
         installKeyMonitor()
 
-        // Live-resize the window when the panel size changes (drag handle).
+        // Live-resize/reposition the window when size or offset changes.
         viewModel.$openWidth
-            .combineLatest(viewModel.$openHeight)
+            .combineLatest(viewModel.$openHeight, viewModel.$horizontalOffset)
             .dropFirst()
-            .sink { [weak self] _, _ in self?.applyPanelSize() }
+            .sink { [weak self] _, _, _ in self?.applyPanelSize() }
             .store(in: &cancellables)
 
         // Live-update the trigger pill when its non-notch appearance changes.
@@ -85,6 +85,14 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
             .dropFirst()
             .sink { [weak self] code, mods in
                 self?.hotKey.register(keyCode: UInt32(code), modifiers: UInt32(mods))
+            }
+            .store(in: &cancellables)
+
+        // Live-update the horizontal offset when it changes in settings.
+        settings.$horizontalOffset
+            .dropFirst()
+            .sink { [weak self] offset in
+                self?.viewModel.horizontalOffset = CGFloat(offset)
             }
             .store(in: &cancellables)
 
@@ -230,7 +238,12 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         let f = metrics.screen.frame
         let w = viewModel.openWidth
         let h = viewModel.openHeight
-        return NSRect(x: f.midX - w / 2, y: f.maxY - h, width: w, height: h)
+        let offset = viewModel.hasHardwareNotch ? 0.0 : viewModel.horizontalOffset
+        let minX = f.minX
+        let maxX = f.maxX - w
+        let targetX = f.midX - w / 2 + offset
+        let clampedX = min(max(targetX, minX), maxX)
+        return NSRect(x: clampedX, y: f.maxY - h, width: w, height: h)
     }
 
     /// Hot zone around the notch that triggers opening (screen coords). Uses the
@@ -239,7 +252,12 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         let f = metrics.screen.frame
         let width = max(viewModel.notchWidth + 80, 200)
         let height = max(viewModel.notchHeight + 6, 30)
-        return NSRect(x: f.midX - width / 2, y: f.maxY - height, width: width, height: height)
+        let offset = viewModel.hasHardwareNotch ? 0.0 : viewModel.horizontalOffset
+        let minX = f.minX
+        let maxX = f.maxX - width
+        let targetX = f.midX - width / 2 + offset
+        let clampedX = min(max(targetX, minX), maxX)
+        return NSRect(x: clampedX, y: f.maxY - height, width: width, height: height)
     }
 
     /// Re-applies the trigger-pill appearance after the user changes the

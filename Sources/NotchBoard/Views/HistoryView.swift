@@ -154,6 +154,7 @@ private struct ClipboardCard: View {
     var onToggleFavorite: () -> Void = {}
     @State private var showTooltip = false
     @State private var tooltipTask: DispatchWorkItem?
+    @State private var metadata: MetadataCache.Info?
 
     private var borderColor: Color {
         if isCopied { return .accentColor }
@@ -199,6 +200,12 @@ private struct ClipboardCard: View {
                 tooltipTask?.cancel()
                 withAnimation(.easeOut(duration: 0.1)) { showTooltip = false }
             }
+        }
+        .onAppear {
+            loadMetadata()
+        }
+        .onChange(of: item) { _, _ in
+            loadMetadata()
         }
     }
 
@@ -312,7 +319,12 @@ private struct ClipboardCard: View {
         case .color:
             colorPreview
         case .file:
-            placeholder(icon: "doc.fill")
+            if let url = item.fileURL,
+               ["png", "jpg", "jpeg", "gif", "heic", "webp", "tiff", "bmp"].contains(url.pathExtension.lowercased()) {
+                ThumbnailImage(url: url, maxPixel: 256, contentMode: .fill)
+            } else {
+                placeholder(icon: "doc.fill")
+            }
         case .link:
             LinkPreview(urlString: item.text ?? "")
         case .text:
@@ -321,9 +333,10 @@ private struct ClipboardCard: View {
     }
 
     private var imageBadge: some View {
+        let info = metadata ?? (item.fileURL.flatMap { MetadataCache.shared.cached(for: $0) })
         let parts = [
-            item.pixelSize.map { "\(Int($0.width))×\(Int($0.height))" },
-            item.fileSizeString
+            info?.pixelSize.map { "\(Int($0.width))×\(Int($0.height))" },
+            info?.sizeString
         ].compactMap { $0 }
         return Group {
             if !parts.isEmpty {
@@ -415,6 +428,15 @@ private struct ClipboardCard: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+    }
+
+    private func loadMetadata() {
+        guard let url = item.fileURL else { return }
+        MetadataCache.shared.info(for: url, isImage: item.kind == .image) { info in
+            DispatchQueue.main.async {
+                self.metadata = info
+            }
+        }
     }
 }
 
