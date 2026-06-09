@@ -32,23 +32,23 @@ struct ThumbnailImage: View {
         .onChange(of: url) { _, _ in image = nil; load() }
     }
 
+    @MainActor
     private func load() {
         if let hit = ThumbnailCache.shared.cached(for: url, maxPixel: maxPixel) {
             image = hit
             return
         }
-        ThumbnailCache.shared.thumbnail(for: url, maxPixel: maxPixel) { result in
-            Task { @MainActor in
-                if let result = result {
-                    self.image = result
+        Task {
+            let result = await ThumbnailCache.shared.thumbnail(for: url, maxPixel: maxPixel)
+            if let result = result {
+                self.image = result
+            } else {
+                // Fall back to a lightweight, instant generic icon (without hitting the disk for a path)
+                let isDir = url.pathExtension.isEmpty
+                if isDir {
+                    self.image = NSWorkspace.shared.icon(for: .folder)
                 } else {
-                    // Fall back to a lightweight, instant generic icon (without hitting the disk for a path)
-                    let isDir = url.pathExtension.isEmpty
-                    if isDir {
-                        self.image = NSWorkspace.shared.icon(for: .folder)
-                    } else {
-                        self.image = NSWorkspace.shared.icon(for: .item)
-                    }
+                    self.image = NSWorkspace.shared.icon(for: .item)
                 }
             }
         }

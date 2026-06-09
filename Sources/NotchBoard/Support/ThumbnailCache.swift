@@ -18,17 +18,18 @@ final class ThumbnailCache: @unchecked Sendable {
         cache.object(forKey: key(url, maxPixel) as NSString)
     }
 
-    /// Loads (or generates) a thumbnail off the main thread, then calls back on main.
-    func thumbnail(for url: URL, maxPixel: CGFloat, completion: @escaping @Sendable (NSImage?) -> Void) {
+    /// Loads (or generates) a thumbnail off the main thread.
+    func thumbnail(for url: URL, maxPixel: CGFloat) async -> NSImage? {
         let k = key(url, maxPixel)
         if let hit = cache.object(forKey: k as NSString) {
-            completion(hit)
-            return
+            return hit
         }
-        queue.async { [weak self] in
-            let image = Self.makeThumbnail(url: url, maxPixel: maxPixel)
-            if let image { self?.cache.setObject(image, forKey: k as NSString) }
-            DispatchQueue.main.async { completion(image) }
+        return await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                let image = Self.makeThumbnail(url: url, maxPixel: maxPixel)
+                if let image { self?.cache.setObject(image, forKey: k as NSString) }
+                continuation.resume(returning: image)
+            }
         }
     }
 

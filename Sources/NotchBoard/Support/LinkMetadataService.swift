@@ -22,37 +22,27 @@ final class LinkMetadataService: ObservableObject {
               let url = URL(string: urlString) else { return }
         inFlight.insert(urlString)
 
-        Self.loadMetadata(for: url) { [weak self] title, image in
-            // NSImage is not Sendable on every SDK, so silence the region-based
-            // sending check explicitly before hopping back to the main actor.
-            let img = image
-            Task { @MainActor in
-                guard let self else { return }
-                self.inFlight.remove(urlString)
-                self.cache[urlString] = Meta(title: title, image: img)
-            }
+        Task {
+            let (title, image) = await Self.loadMetadata(for: url)
+            self.inFlight.remove(urlString)
+            self.cache[urlString] = Meta(title: title, image: image)
         }
     }
 
-    /// Drives LinkPresentation from a nonisolated context. Its completion handlers
-    /// fire on a private dispatch queue, so the callback passed in here must stay
-    /// nonisolated (`@Sendable`). If it were inferred `@MainActor` (because this
-    /// type is main-actor isolated), Swift 6's executor-isolation check would trap
-    /// and crash the app when the callback runs off the main thread.
-    private nonisolated static func loadMetadata(
-        for url: URL,
-        completion: @escaping @Sendable (String?, NSImage?) -> Void
-    ) {
-        let provider = LPMetadataProvider()
-        provider.startFetchingMetadata(for: url) { metadata, _ in
-            let host = url.host ?? url.absoluteString
-            let title = metadata?.title ?? host
-            guard let imageProvider = metadata?.imageProvider ?? metadata?.iconProvider else {
-                completion(title, nil)
-                return
-            }
-            imageProvider.loadObject(ofClass: NSImage.self) { object, _ in
-                completion(title, object as? NSImage)
+    /// Drives LinkPresentation from a nonisolated context.
+    private nonisolated static func loadMetadata(for url: URL) async -> (String?, NSImage?) {
+        await withCheckedContinuation { continuation in
+            let provider = LPMetadataProvider()
+            provider.startFetchingMetadata(for: url) { metadata, _ in
+                let host = url.host ?? url.absoluteString
+                let title = metadata?.title ?? host
+                guard let imageProvider = metadata?.imageProvider ?? metadata?.iconProvider else {
+                    continuation.resume(returning: (title, nil))
+                    return
+                }
+                imageProvider.loadObject(ofClass: NSImage.self) { object, _ in
+                    continuation.resume(returning: (title, object as? NSImage))
+                }
             }
         }
     }
