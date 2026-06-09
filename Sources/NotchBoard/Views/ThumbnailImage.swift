@@ -41,7 +41,7 @@ struct ThumbnailImage: View {
         Task {
             let result = await ThumbnailCache.shared.thumbnail(for: url, maxPixel: maxPixel)
             if let result = result {
-                self.image = result
+                self.image = result.image
             } else {
                 // Fall back to a lightweight, instant generic icon (without hitting the disk for a path)
                 let isDir = url.pathExtension.isEmpty

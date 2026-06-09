@@ -1,6 +1,10 @@
 import AppKit
 import ImageIO
 
+struct SendableImage: @unchecked Sendable {
+    let image: NSImage
+}
+
 /// Generates and caches downsized thumbnails so grids stay smooth even with many
 /// images. Avoids loading full-resolution NSImages on every redraw.
 final class ThumbnailCache: @unchecked Sendable {
@@ -19,16 +23,20 @@ final class ThumbnailCache: @unchecked Sendable {
     }
 
     /// Loads (or generates) a thumbnail off the main thread.
-    func thumbnail(for url: URL, maxPixel: CGFloat) async -> NSImage? {
+    func thumbnail(for url: URL, maxPixel: CGFloat) async -> SendableImage? {
         let k = key(url, maxPixel)
         if let hit = cache.object(forKey: k as NSString) {
-            return hit
+            return SendableImage(image: hit)
         }
         return await withCheckedContinuation { continuation in
             queue.async { [weak self] in
                 let image = Self.makeThumbnail(url: url, maxPixel: maxPixel)
-                if let image { self?.cache.setObject(image, forKey: k as NSString) }
-                continuation.resume(returning: image)
+                if let image {
+                    self?.cache.setObject(image, forKey: k as NSString)
+                    continuation.resume(returning: SendableImage(image: image))
+                } else {
+                    continuation.resume(returning: nil)
+                }
             }
         }
     }

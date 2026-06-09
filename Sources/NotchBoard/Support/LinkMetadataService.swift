@@ -7,7 +7,7 @@ import LinkPresentation
 final class LinkMetadataService: ObservableObject {
     static let shared = LinkMetadataService()
 
-    struct Meta {
+    struct Meta: @unchecked Sendable {
         var title: String?
         var image: NSImage?
     }
@@ -23,25 +23,25 @@ final class LinkMetadataService: ObservableObject {
         inFlight.insert(urlString)
 
         Task {
-            let (title, image) = await Self.loadMetadata(for: url)
+            let meta = await Self.loadMetadata(for: url)
             self.inFlight.remove(urlString)
-            self.cache[urlString] = Meta(title: title, image: image)
+            self.cache[urlString] = meta
         }
     }
 
     /// Drives LinkPresentation from a nonisolated context.
-    private nonisolated static func loadMetadata(for url: URL) async -> (String?, NSImage?) {
+    private nonisolated static func loadMetadata(for url: URL) async -> Meta {
         await withCheckedContinuation { continuation in
             let provider = LPMetadataProvider()
             provider.startFetchingMetadata(for: url) { metadata, _ in
                 let host = url.host ?? url.absoluteString
                 let title = metadata?.title ?? host
                 guard let imageProvider = metadata?.imageProvider ?? metadata?.iconProvider else {
-                    continuation.resume(returning: (title, nil))
+                    continuation.resume(returning: Meta(title: title, image: nil))
                     return
                 }
                 imageProvider.loadObject(ofClass: NSImage.self) { object, _ in
-                    continuation.resume(returning: (title, object as? NSImage))
+                    continuation.resume(returning: Meta(title: title, image: object as? NSImage))
                 }
             }
         }
