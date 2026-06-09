@@ -46,6 +46,9 @@ enum L {
     static var transformTrim: String { t("Trim whitespace", "Boşlukları kırp") }
     static var transformJSON: String { t("Beautify JSON", "JSON güzelleştir") }
     static var transformURLEncode: String { t("URL encode", "URL kodla") }
+    static var transformURLDecode: String { t("URL decode", "URL çöz") }
+    static var transformBase64Encode: String { t("Base64 encode", "Base64 kodla") }
+    static var transformBase64Decode: String { t("Base64 decode", "Base64 çöz") }
     static func copiedKind(_ kind: ClipboardItem.Kind) -> String {
         switch kind {
         case .text: return t("Text copied", "Metin kopyalandı")

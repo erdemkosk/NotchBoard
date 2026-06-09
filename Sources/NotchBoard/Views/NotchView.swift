@@ -24,6 +24,7 @@ struct NotchView: View {
             } else if let hudItem = viewModel.hudItem {
                 CaptureHUD(
                     item: hudItem,
+                    errorMessage: viewModel.hudErrorMessage,
                     notchWidth: viewModel.notchWidth,
                     notchHeight: viewModel.notchHeight,
                     onUndo: {

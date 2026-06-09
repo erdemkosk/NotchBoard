@@ -38,7 +38,7 @@ final class NotchViewModel: ObservableObject {
 
     /// Quick text transforms available from a card's context menu.
     enum TextTransform: String, CaseIterable, Identifiable {
-        case uppercase, lowercase, trim, jsonPretty, urlEncode
+        case uppercase, lowercase, trim, jsonPretty, urlEncode, urlDecode, base64Encode, base64Decode
         var id: String { rawValue }
 
         var title: String {
@@ -48,6 +48,9 @@ final class NotchViewModel: ObservableObject {
             case .trim: return L.transformTrim
             case .jsonPretty: return L.transformJSON
             case .urlEncode: return L.transformURLEncode
+            case .urlDecode: return L.transformURLDecode
+            case .base64Encode: return L.transformBase64Encode
+            case .base64Decode: return L.transformBase64Decode
             }
         }
 
@@ -58,6 +61,9 @@ final class NotchViewModel: ObservableObject {
             case .trim: return "scissors"
             case .jsonPretty: return "curlybraces"
             case .urlEncode: return "link"
+            case .urlDecode: return "link.badge.plus"
+            case .base64Encode: return "lock"
+            case .base64Decode: return "lock.open"
             }
         }
 
@@ -78,6 +84,15 @@ final class NotchViewModel: ObservableObject {
                 return out
             case .urlEncode:
                 return s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            case .urlDecode:
+                return s.removingPercentEncoding
+            case .base64Encode:
+                return s.data(using: .utf8)?.base64EncodedString()
+            case .base64Decode:
+                guard let data = Data(base64Encoded: s.trimmingCharacters(in: .whitespacesAndNewlines)),
+                      let out = String(data: data, encoding: .utf8)
+                else { return nil }
+                return out
             }
         }
     }
@@ -99,21 +114,24 @@ final class NotchViewModel: ObservableObject {
 
     /// Transient Dynamic-Island-style capture confirmation shown near the notch.
     @Published var hudItem: ClipboardItem?
+    @Published var hudErrorMessage: String?
     private var hudWorkItem: DispatchWorkItem?
 
     /// Increments on each capture to trigger a brief glow pulse on the notch.
     @Published var capturePulse = 0
 
     /// Shows the capture HUD for ~1.6s.
-    func showCaptureHUD(_ item: ClipboardItem) {
+    func showCaptureHUD(_ item: ClipboardItem, errorMessage: String? = nil) {
         capturePulse += 1
         hudWorkItem?.cancel()
         withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
             hudItem = item
+            hudErrorMessage = errorMessage
         }
         let work = DispatchWorkItem { [weak self] in
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 self?.hudItem = nil
+                self?.hudErrorMessage = nil
             }
         }
         hudWorkItem = work
@@ -128,6 +146,7 @@ final class NotchViewModel: ObservableObject {
             let work = DispatchWorkItem { [weak self] in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                     self?.hudItem = nil
+                    self?.hudErrorMessage = nil
                 }
             }
             hudWorkItem = work
@@ -202,10 +221,28 @@ final class NotchViewModel: ObservableObject {
     /// Applies a quick text transform to the item's text, replaces the stored
     /// item's data with the transformed result, and copies it to the pasteboard.
     func copyTransformed(_ item: ClipboardItem, _ transform: TextTransform) {
-        guard let text = item.text, let out = transform.apply(text) else { return }
-        clipboard.copyString(out)
-        clipboard.updateText(out, for: item)
-        finishCopy(item)
+        guard let text = item.text else { return }
+        if let out = transform.apply(text) {
+            clipboard.copyString(out)
+            clipboard.updateText(out, for: item)
+            finishCopy(item)
+        } else {
+            // Transform failed (e.g. invalid JSON, invalid Base64, etc.)
+            NSSound.beep()
+            let errorMsg: String
+            switch transform {
+            case .jsonPretty:
+                errorMsg = L.t("Invalid JSON", "Geçersiz JSON")
+            case .base64Decode:
+                errorMsg = L.t("Invalid Base64", "Geçersiz Base64")
+            default:
+                errorMsg = L.t("Transform Failed", "Dönüşüm Başarısız")
+            }
+            showCaptureHUD(item, errorMessage: errorMsg)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                self?.requestClose?()
+            }
+        }
     }
 
     private func finishCopy(_ item: ClipboardItem) {

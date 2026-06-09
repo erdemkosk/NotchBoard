@@ -69,7 +69,10 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         viewModel.$openWidth
             .combineLatest(viewModel.$openHeight, viewModel.$horizontalOffset)
             .dropFirst()
-            .sink { [weak self] _, _, _ in self?.applyPanelSize() }
+            .sink { [weak self] _, _, _ in
+                self?.applyPanelSize()
+                self?.refreshPillAppearance()
+            }
             .store(in: &cancellables)
 
         // Live-update the trigger pill when its non-notch appearance changes.
@@ -246,13 +249,13 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
         return NSRect(x: clampedX, y: f.maxY - h, width: w, height: h)
     }
 
-    /// Hot zone around the notch that triggers opening (screen coords). Uses the
-    /// effective pill size (which honors the user's non-notch customization).
     private func triggerRect() -> NSRect {
         let f = metrics.screen.frame
-        let width = max(viewModel.notchWidth + 80, 200)
-        let height = max(viewModel.notchHeight + 6, 30)
+        // Keep it tight to the notch/pill bounds (only 4pt padding on each side) to avoid blocking menu/tray icons
+        let width = viewModel.notchWidth + 8
+        let height = viewModel.notchHeight + 2
         let offset = viewModel.hasHardwareNotch ? 0.0 : viewModel.horizontalOffset
+        
         let minX = f.minX
         let maxX = f.maxX - width
         let targetX = f.midX - width / 2 + offset

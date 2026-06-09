@@ -5,6 +5,7 @@ import SwiftUI
 /// small pill, with the content fading in just after.
 struct CaptureHUD: View {
     let item: ClipboardItem
+    var errorMessage: String? = nil
     let notchWidth: CGFloat
     let notchHeight: CGFloat
     var onUndo: (() -> Void)? = nil
@@ -21,18 +22,18 @@ struct CaptureHUD: View {
         HStack(spacing: 8) {
             previewBadge
 
-            Text(L.copied)
+            Text(errorMessage ?? L.copied)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .fixedSize()
 
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: errorMessage == nil ? "checkmark.circle.fill" : "exclamationmark.octagon.fill")
                 .font(.system(size: 13))
-                .foregroundStyle(kindTint)
+                .foregroundStyle(errorMessage == nil ? kindTint : Color.red)
                 .scaleEffect(checkPop ? 1 : 0.3)
 
-            if isHovered {
+            if isHovered && errorMessage == nil {
                 Divider()
                     .frame(height: 14)
                     .background(Color.white.opacity(0.2))
