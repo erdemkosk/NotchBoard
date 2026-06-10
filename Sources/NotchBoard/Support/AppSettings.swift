@@ -40,6 +40,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoPasteEnabled, forKey: Keys.autoPasteEnabled) }
     }
 
+    /// Whether the notch shows a brief "Copied" pill when new clipboard content is captured.
+    @Published var captureHUDEnabled: Bool {
+        didSet { defaults.set(captureHUDEnabled, forKey: Keys.captureHUDEnabled) }
+    }
+
     /// Whether the panel is hidden from screenshots and screen recordings.
     @Published var hideFromScreenCapture: Bool {
         didSet { defaults.set(hideFromScreenCapture, forKey: Keys.hideFromScreenCapture) }
@@ -116,6 +121,7 @@ final class AppSettings: ObservableObject {
         static let triggerPillCornerRadius = "triggerPillCornerRadius"
         static let horizontalOffset = "horizontalOffset"
         static let autoPasteEnabled = "autoPasteEnabled"
+        static let captureHUDEnabled = "captureHUDEnabled"
         static let hideFromScreenCapture = "hideFromScreenCapture"
         static let hotkeyCode = "hotkeyCode"
         static let hotkeyModifiers = "hotkeyModifiers"
@@ -132,6 +138,7 @@ final class AppSettings: ObservableObject {
             Keys.triggerPillCornerRadius: Self.defaultPillCorner,
             Keys.horizontalOffset: 0.0,
             Keys.autoPasteEnabled: false,
+            Keys.captureHUDEnabled: true,
             Keys.hideFromScreenCapture: true,
             Keys.hotkeyCode: kVK_ANSI_V,
             Keys.hotkeyModifiers: cmdKey | shiftKey
@@ -148,6 +155,7 @@ final class AppSettings: ObservableObject {
         triggerPillCornerRadius = defaults.double(forKey: Keys.triggerPillCornerRadius)
         horizontalOffset = defaults.double(forKey: Keys.horizontalOffset)
         autoPasteEnabled = defaults.bool(forKey: Keys.autoPasteEnabled)
+        captureHUDEnabled = defaults.bool(forKey: Keys.captureHUDEnabled)
         hideFromScreenCapture = defaults.bool(forKey: Keys.hideFromScreenCapture)
         hotkeyCode = defaults.integer(forKey: Keys.hotkeyCode)
         hotkeyModifiers = defaults.integer(forKey: Keys.hotkeyModifiers)

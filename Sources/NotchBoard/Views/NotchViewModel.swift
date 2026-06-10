@@ -122,6 +122,7 @@ final class NotchViewModel: ObservableObject {
 
     /// Shows the capture HUD for ~1.6s.
     func showCaptureHUD(_ item: ClipboardItem, errorMessage: String? = nil) {
+        if errorMessage == nil && !AppSettings.shared.captureHUDEnabled { return }
         capturePulse += 1
         hudWorkItem?.cancel()
         withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {

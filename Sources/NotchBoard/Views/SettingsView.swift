@@ -36,6 +36,12 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading, spacing: 4) {
+                    Toggle(L.captureHUD, isOn: $settings.captureHUDEnabled)
+                    Text(L.captureHUDHint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
                     Toggle(L.hideFromScreenCapture, isOn: $settings.hideFromScreenCapture)
                     Text(L.hideFromScreenCaptureHint)
                         .font(.caption)
@@ -173,7 +179,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 710)
+        .frame(width: 400, height: 760)
     }
 
     private var pillPreview: some View {
