@@ -85,6 +85,13 @@ struct HistoryView: View {
                                         systemImage: item.isPinned ? "pin.slash" : "pin"
                                     )
                                 }
+                                if item.isPinned, item.text != nil {
+                                    Button {
+                                        editSnippet(item)
+                                    } label: {
+                                        Label(L.editSnippet, systemImage: "square.and.pencil")
+                                    }
+                                }
                                 Button {
                                     viewModel.clipboard.toggleFavorite(item)
                                 } label: {
@@ -168,6 +175,15 @@ struct HistoryView: View {
             confirm: L.save
         ) else { return }
         viewModel.clipboard.setDisplayName(name, for: item)
+    }
+
+    private func editSnippet(_ item: ClipboardItem) {
+        guard let text = SnippetPrompt.run(
+            title: L.editSnippetTitle,
+            hint: L.editSnippetHint,
+            initial: item.text ?? ""
+        ) else { return }
+        viewModel.clipboard.updateSnippet(text, for: item)
     }
 }
 

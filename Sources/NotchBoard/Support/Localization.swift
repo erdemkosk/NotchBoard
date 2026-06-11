@@ -71,6 +71,9 @@ enum L {
     static var newSnippet: String { t("New Snippet", "Yeni Snippet") }
     static var newSnippetTitle: String { t("New snippet", "Yeni snippet") }
     static var newSnippetHint: String { t("Save reusable text (signature, address, code). It stays pinned at the top.", "Tekrar kullanılabilir metin kaydet (imza, adres, kod). Üstte sabit kalır.") }
+    static var editSnippet: String { t("Edit Snippet…", "Snippet'i düzenle…") }
+    static var editSnippetTitle: String { t("Edit snippet", "Snippet'i düzenle") }
+    static var editSnippetHint: String { t("Update the reusable text. It stays pinned at the top.", "Tekrar kullanılabilir metni güncelle. Üstte sabit kalır.") }
     static var snippetPlaceholder: String { t("Type or paste your snippet…", "Snippet'ini yaz veya yapıştır…") }
     static var save: String { t("Save", "Kaydet") }
     static var addTag: String { t("Add Tag…", "Etiket Ekle…") }

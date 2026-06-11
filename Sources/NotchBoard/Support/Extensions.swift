@@ -286,13 +286,17 @@ enum TextPrompt {
     }
 }
 
-/// Modal prompt for creating a reusable, pinned text snippet (multiline).
+/// Modal prompt for creating or editing a reusable, pinned text snippet (multiline).
 @MainActor
 enum SnippetPrompt {
-    static func run() -> String? {
+    static func run(
+        title: String = L.newSnippetTitle,
+        hint: String = L.newSnippetHint,
+        initial: String = ""
+    ) -> String? {
         let alert = NSAlert()
-        alert.messageText = L.newSnippetTitle
-        alert.informativeText = L.newSnippetHint
+        alert.messageText = title
+        alert.informativeText = hint
         alert.addButton(withTitle: L.save)
         alert.addButton(withTitle: L.cancel)
 
@@ -303,6 +307,7 @@ enum SnippetPrompt {
         textView.autoresizingMask = [.width]
         textView.font = .systemFont(ofSize: 13)
         textView.isRichText = false
+        textView.string = initial
         scroll.documentView = textView
         alert.accessoryView = scroll
         alert.window.initialFirstResponder = textView

@@ -204,31 +204,43 @@ final class ClipboardManager: ObservableObject {
     private func poll() {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
-        guard let item = captureCurrent() else { return }
-        insert(item)
+        let captured = captureCurrentItems()
+        guard !captured.isEmpty else { return }
+        if captured.count == 1 {
+            insert(captured[0])
+        } else {
+            insertBatch(captured)
+        }
     }
 
-    private func captureCurrent() -> ClipboardItem? {
+    private func captureCurrentItems() -> [ClipboardItem] {
         // Respect privacy: skip content marked sensitive/transient.
         if AppSettings.shared.skipSensitive, isSensitive() {
-            return nil
+            return []
         }
 
         let app = NSWorkspace.shared.frontmostApplication
         let appName = app?.localizedName
         let appIcon = app?.icon
 
-        // 1. File URLs.
+        // 1. File URLs (Finder multi-select copies every file).
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [
             .urlReadingFileURLsOnly: true
-        ]) as? [URL], let first = urls.first {
-            return ClipboardItem(
-                kind: .file,
-                text: first.path,
-                fileURL: first,
-                sourceAppName: appName,
-                sourceAppIcon: appIcon
-            )
+        ]) as? [URL] {
+            let fileURLs = urls.filter(\.isFileURL)
+            if !fileURLs.isEmpty {
+                let capturedAt = Date()
+                return fileURLs.map { url in
+                    ClipboardItem(
+                        kind: .file,
+                        createdAt: capturedAt,
+                        text: url.path,
+                        fileURL: url,
+                        sourceAppName: appName,
+                        sourceAppIcon: appIcon
+                    )
+                }
+            }
         }
 
         // 2. Images.
@@ -239,13 +251,13 @@ final class ClipboardManager: ObservableObject {
            !types.contains(where: { $0 == .rtf || $0 == .rtfd }) {
             let itemId = UUID()
             if let url = cacheImageFromPasteboard(itemId: itemId) {
-                return ClipboardItem(
+                return [ClipboardItem(
                     id: itemId,
                     kind: .image,
                     fileURL: url,
                     sourceAppName: appName,
                     sourceAppIcon: appIcon
-                )
+                )]
             }
         }
 
@@ -253,15 +265,15 @@ final class ClipboardManager: ObservableObject {
         if let string = pasteboard.string(forType: .string),
            !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let kind = classifyText(string)
-            return ClipboardItem(
+            return [ClipboardItem(
                 kind: kind,
                 text: string,
                 sourceAppName: appName,
                 sourceAppIcon: appIcon
-            )
+            )]
         }
 
-        return nil
+        return []
     }
 
     private func isSensitive() -> Bool {
@@ -303,6 +315,14 @@ final class ClipboardManager: ObservableObject {
         items.insert(item, at: 0)
         persist()
         return item
+    }
+
+    /// Updates a pinned snippet's text in place.
+    func updateSnippet(_ text: String, for item: ClipboardItem) {
+        guard item.isPinned else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        updateText(trimmed, for: item)
     }
 
     /// Removes non-pinned, non-favorite items older than the configured retention
@@ -371,6 +391,15 @@ final class ClipboardManager: ObservableObject {
         trimIfNeeded()
         persist()
         onCapture?(item)
+    }
+
+    /// Inserts several items from one clipboard change (e.g. multi-file copy).
+    private func insertBatch(_ newItems: [ClipboardItem]) {
+        guard !newItems.isEmpty else { return }
+        items.insert(contentsOf: newItems, at: 0)
+        trimIfNeeded()
+        persist()
+        onCapture?(newItems[0])
     }
 
     /// Trims to maxItems but never drops favorites or pinned snippets.
