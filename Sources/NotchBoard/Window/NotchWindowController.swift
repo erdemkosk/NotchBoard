@@ -216,6 +216,7 @@ final class NotchWindowController: NSObject, NotchTriggerDelegate {
     // MARK: - NotchTriggerDelegate
 
     func triggerActivated(dragging: Bool) {
+        if !dragging && !AppSettings.shared.openOnHoverEnabled { return }
         if dragging {
             // Reveal the shelf so the dragged file has somewhere to land.
             viewModel.selectedTab = .shelf

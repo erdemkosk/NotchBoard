@@ -45,6 +45,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(captureHUDEnabled, forKey: Keys.captureHUDEnabled) }
     }
 
+    /// Whether moving the cursor over the notch opens the panel (hotkey always works).
+    @Published var openOnHoverEnabled: Bool {
+        didSet { defaults.set(openOnHoverEnabled, forKey: Keys.openOnHoverEnabled) }
+    }
+
     /// Whether the panel is hidden from screenshots and screen recordings.
     @Published var hideFromScreenCapture: Bool {
         didSet { defaults.set(hideFromScreenCapture, forKey: Keys.hideFromScreenCapture) }
@@ -122,6 +127,7 @@ final class AppSettings: ObservableObject {
         static let horizontalOffset = "horizontalOffset"
         static let autoPasteEnabled = "autoPasteEnabled"
         static let captureHUDEnabled = "captureHUDEnabled"
+        static let openOnHoverEnabled = "openOnHoverEnabled"
         static let hideFromScreenCapture = "hideFromScreenCapture"
         static let hotkeyCode = "hotkeyCode"
         static let hotkeyModifiers = "hotkeyModifiers"
@@ -139,6 +145,7 @@ final class AppSettings: ObservableObject {
             Keys.horizontalOffset: 0.0,
             Keys.autoPasteEnabled: false,
             Keys.captureHUDEnabled: true,
+            Keys.openOnHoverEnabled: true,
             Keys.hideFromScreenCapture: true,
             Keys.hotkeyCode: kVK_ANSI_V,
             Keys.hotkeyModifiers: cmdKey | shiftKey
@@ -156,6 +163,7 @@ final class AppSettings: ObservableObject {
         horizontalOffset = defaults.double(forKey: Keys.horizontalOffset)
         autoPasteEnabled = defaults.bool(forKey: Keys.autoPasteEnabled)
         captureHUDEnabled = defaults.bool(forKey: Keys.captureHUDEnabled)
+        openOnHoverEnabled = defaults.bool(forKey: Keys.openOnHoverEnabled)
         hideFromScreenCapture = defaults.bool(forKey: Keys.hideFromScreenCapture)
         hotkeyCode = defaults.integer(forKey: Keys.hotkeyCode)
         hotkeyModifiers = defaults.integer(forKey: Keys.hotkeyModifiers)
